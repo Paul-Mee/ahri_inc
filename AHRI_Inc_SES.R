@@ -30,7 +30,7 @@ source(paste0(code_dir,"test_ahri.R"))
 
 # Define vector of package names
 
-package_names <- c('haven','dplyr','survival')
+package_names <- c('haven','dplyr','survival','psych','lubridate')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -82,19 +82,18 @@ MIpredict(mod, newdata=age_dat)
 
 ### linking SES data
 
-tmp_data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023/'
-
 ### Loading Household Asset data 
 
-stata_data_file <- 'RD06-99 ACDIS HSE-H All.dta'
-ACDIS_hh <- haven::read_dta(paste0(tmp_data_dir,stata_data_file))
+stata_data_file <- '/RD06-99 ACDIS HSE-H All.dta'
+ACDIS_hh <- haven::read_dta(paste0(data_dir,stata_data_file))
 
 
 ### Recoding and normalising variables 
+### For each variable recode such that 1 represents the most wealthy and 0 least wealthy 
+### these definitions are subjective and could be changed based on local feedback
+### For the next version functions could be developed to avoid repetitive lines of code
 
 ### Water Source 
-
-
 
 ACDIS_hh$water <- NA
 
@@ -345,7 +344,89 @@ ACDIS_hh$VAC[as.integer(ACDIS_hh$VAC)== 9] <- NA
 
 ### All variables scaled from 0 to 1 - calculate SES quintiles for each year
 
-### Create a new dataframe with household ID , Visit Year , Visit Date and new variables 
+### Create a list of assets to be included in the index
+
+asset_list <- c("HHIntId",
+                "BSIntId",
+                "VisitDate",
+                "water_norm",
+                "toilet_norm",
+                "electric",
+                "energy_norm",
+                # "wall_mat_norm", 
+                # "roof_mat_norm",
+                "BED",
+                "BIC",
+                "BLM",
+                "CAR",
+                "CBE",
+                "CTL",
+                "ECO",
+                "EHP",
+                "EKT",
+                "FRG",
+                "GCK",
+                "HSF",
+                "KLT",
+                "KTS",
+                "MCS",
+                "OLS",
+                "PMC",
+                "RAD",
+                "SOF",
+                "SWM",
+                "TBC",
+                "TLL",
+                "TMB",
+                "TVS",
+                "VCR",
+                "WBR",
+                "HWG",
+                "WSM",
+                "EHT",
+                "PHT",
+                "SHF",
+                "CPT",
+                "VAN",
+                "LOR",
+                "TFV",
+                "FRN",
+                "JWT",
+                "ACN",
+                "DIS",
+                "MIC",
+                "PTV",
+                "SEC",
+                "SWP",
+                "TUM",
+                "VAC")
+
+### Create new dataframe with just identifier, year and asset data 
+
+ass_data <- ACDIS_hh[,asset_list]
+
+### Extract year from visit date 
+
+ass_data$Visit_Year <- lubridate::year(ass_data$VisitDate)
+
+### Count number of visits per year per household
+
+# ranking by HHID and Visit Date 
+
+ass_data <- ass_data %>% arrange(HHIntId, VisitDate) %>%
+  group_by(HHIntId,Visit_Year) %>% 
+  mutate(rank = rank(-as.numeric(VisitDate)))
+
+### If two visits in a year just use first 
+#ass_data <- ass_data %>% filter(rank==1)
+
+
+ass_data_2021 <- ass_data %>% filter(Visit_Year == 2021)
+### Drop any rows with NA values 
+ass_data_2021 <-  na.omit(ass_data_2021)
+
+
+prn<-psych::principal(ass_data_2021[,4:(ncol(ass_data_2021)-1)], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
 
 ### In loop select each year from 2004 to 2023 
 ### Calculate quintiles for that year 
