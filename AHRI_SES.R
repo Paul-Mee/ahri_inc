@@ -196,10 +196,8 @@ table(ACDIS_hh$roof_mat_norm)
 ## Other Variables All coded 1 - Yes and 0 - No
 ## Convert 9's unknown to NA
 
-
 # V78 BED Doe HH have ... Bed
 ACDIS_hh$BED[as.integer(ACDIS_hh$BED)== 9] <- NA
-ACDIS_hh$BED <- as.integer(ACDIS_hh$BED)
 # V79 BIC Doe HH have ... Bicycle
 ACDIS_hh$BIC[as.integer(ACDIS_hh$BIC)== 9] <- NA
 # V80 BLM Doe HH have ... Blockmaker
@@ -293,6 +291,7 @@ ACDIS_hh$VAC[as.integer(ACDIS_hh$VAC)== 9] <- NA
 ### All variables scaled from 0 to 1 - calculate SES quintiles for each year
 
 ### Create a list of assets to be included in the index
+### Comment out those not to be used in the calculation 
 
 asset_list <- c("HHIntId",
                 "BSIntId",
@@ -350,16 +349,16 @@ asset_list <- c("HHIntId",
                 "TUM",
                 "VAC")
 
-### Create new dataframe with just identifier, year and asset data 
+### Create new dataframe with just required data 
 
 ass_data <- ACDIS_hh[,asset_list]
 
 # ### Extract year from visit date 
 # 
-# ass_data$Visit_Year <- lubridate::year(ass_data$VisitDate)
+ass_data$Visit_Year <- lubridate::year(ass_data$VisitDate)
 # 
 # ### Move Visit data column
-# ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
+ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
 
 
 ### Count number of visits per year per household
@@ -381,6 +380,7 @@ ass_data <- data.frame(ass_data)
 
 start_year = 2004
 end_year = 2023
+n_fact = 3 # Number of quantiles in SES
 
 #i = 2020
 
@@ -399,8 +399,7 @@ for (i in start_year:end_year) {
   ass_data_tmp_tail <-  ass_data_tmp_tail[, colSums(ass_data_tmp_tail != 0) > 0]
 
   # Run PCA 
-  prn<-psych::principal(ass_data_tmp_tail, rotate="varimax", nfactors=3,covar=T, scores=TRUE)
-  #prn<-psych::principal(ass_data_tmp[,4:10], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
+  prn<-psych::principal(ass_data_tmp_tail, rotate="varimax", nfactors=n_fact,covar=T, scores=TRUE)
   # Calculate Wealth quantiles 1 = poorest to n = richest
   ass_data_tmp_head$prn_score <- prn$scores[,1]
   ass_data_tmp_head$wealth_quantile <-  schoRsch::ntiles(ass_data_tmp_head, dv = "prn_score", bins=3)
@@ -419,51 +418,68 @@ for (i in start_year:end_year) {
 stata_data_file <- "/SurveillanceEpisodesHIV.dta"
 ACDIS_epi <- haven::read_dta(paste0(data_dir,stata_data_file))
 
-### Need to select Visit_Year as mid point in episode from epi file 
+### Select Visit_Year as mid point in episode from epi file 
 ### Merge on HHIntId = HouseholdId and Visit_Year = Mid_Visit_year
 
-ACDIS_epi$Start_Year <- lubridate::year(ACDIS_hh$VisitDate)
+ACDIS_epi$Start_Year <- lubridate::year(ACDIS_epi$StartDate)
+ACDIS_epi$End_Year <- lubridate::year(ACDIS_epi$EndDate)
+
+ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
 
 
-
-
-ACDIS_hh_quant <- merge(ass_data_all,ACDIS_hh,by= (c("HHIntId","BSIntId","Visit_Year")))
+ACDIS_epi_quant <- merge(ass_data_all,ACDIS_epi, by.x= (c("HHIntId","Visit_Year")),
+                                                by.y = (c("HouseholdId","Mid_Year")))
 
 
 ### Split dataframe into subsets based on quantile value
+ACDIS_epi_quant_sp <- split(ACDIS_epi_quant, ACDIS_epi_quant$wealth_quantile, drop = TRUE)
 
-ass_data_quant <- split(ACDIS_hh_quant, ACDIS_hh_quant$wealth_quantile, drop = TRUE)
-
-ass_data_q1 <- ass_data_quant[[1]]
-ass_data_q2 <- ass_data_quant[[2]]
-ass_data_q3 <- ass_data_quant[[3]]
+### In a for loop produce the individual files for each quantile
 
 
+for (i in 1:n_fact) {
+print(i)
 
-## q1 data
-R_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.RDS")
-ST_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.dta")
+ACDIS_epi_q <- ACDIS_epi_quant_sp [[i]]
+ST_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.dta")
+R_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.RDS")
 ### Saving as RDS file
-saveRDS(ass_data_q1, file = R_fname_SES_q1) 
-### Saving as a '.dta' file 
-haven::write_dta(ass_data_q1,ST_fname_SES_q1) 
+saveRDS(ACDIS_epi_q, file = R_fname_SES_q) 
+print(paste0("Writing RDS file - ",R_fname_SES_q))
 
-## q2 data
-R_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.RDS")
-ST_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.dta")
-### Saving as RDS file
-saveRDS(ass_data_q2, file = R_fname_SES_q2) 
 ### Saving as a '.dta' file 
-haven::write_dta(ass_data_q2,ST_fname_SES_q2) 
+haven::write_dta(ACDIS_epi_q,ST_fname_SES_q) 
+print(paste0("Writing Stata file - ",ST_fname_SES_q))
+}
 
-## q3 data 
-R_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.RDS")
-ST_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.dta")
-### Saving as RDS file
-saveRDS(ass_data_q3, file = R_fname_SES_q3) 
-### Saving as a '.dta' file 
-haven::write_dta(ass_data_q3,ST_fname_SES_q3) 
 
+
+# ## q1 data
+# R_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.RDS")
+# ST_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.dta")
+# ### Saving as RDS file
+# saveRDS(ACDIS_epi_q1, file = R_fname_SES_q1) 
+# ### Saving as a '.dta' file 
+# haven::write_dta(ACDIS_epi_q1,ST_fname_SES_q1) 
+# 
+# 
+# 
+# ## q2 data
+# R_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.RDS")
+# ST_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.dta")
+# ### Saving as RDS file
+# saveRDS(ACDIS_epi_q2, file = R_fname_SES_q2) 
+# ### Saving as a '.dta' file 
+# haven::write_dta(ACDIS_epi_q2,ST_fname_SES_q2) 
+# 
+# ## q3 data 
+# R_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.RDS")
+# ST_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.dta")
+# ### Saving as RDS file
+# saveRDS(ACDIS_epi_q3, file = R_fname_SES_q3) 
+# ### Saving as a '.dta' file 
+# haven::write_dta(ACDIS_epi_q3,ST_fname_SES_q3) 
+# 
 
 
 
