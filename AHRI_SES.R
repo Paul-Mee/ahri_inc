@@ -367,7 +367,7 @@ ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
 
 ## Convert to data.table
 ass_data <- data.table(ass_data)
-## Use data.table::setkey to sort/index by State, then rate, then hospital name
+## Use data.table::setkey to sort
 data.table::setkey(ass_data,HHIntId,Visit_Year,VisitDate)
 ass_data[,rank := seq_len(.N),by = .(HHIntId,VisitDate)]
 
