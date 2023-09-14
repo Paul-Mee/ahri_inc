@@ -454,34 +454,6 @@ print(paste0("Writing Stata file - ",ST_fname_SES_q))
 
 
 
-# ## q1 data
-# R_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.RDS")
-# ST_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.dta")
-# ### Saving as RDS file
-# saveRDS(ACDIS_epi_q1, file = R_fname_SES_q1) 
-# ### Saving as a '.dta' file 
-# haven::write_dta(ACDIS_epi_q1,ST_fname_SES_q1) 
-# 
-# 
-# 
-# ## q2 data
-# R_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.RDS")
-# ST_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.dta")
-# ### Saving as RDS file
-# saveRDS(ACDIS_epi_q2, file = R_fname_SES_q2) 
-# ### Saving as a '.dta' file 
-# haven::write_dta(ACDIS_epi_q2,ST_fname_SES_q2) 
-# 
-# ## q3 data 
-# R_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.RDS")
-# ST_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.dta")
-# ### Saving as RDS file
-# saveRDS(ACDIS_epi_q3, file = R_fname_SES_q3) 
-# ### Saving as a '.dta' file 
-# haven::write_dta(ACDIS_epi_q3,ST_fname_SES_q3) 
-# 
-
-
 
 
 
