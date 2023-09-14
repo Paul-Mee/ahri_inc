@@ -27,6 +27,13 @@ pacman::p_load(char=package_names)
 stata_data_file <- '/RD06-99 ACDIS HSE-H All.dta'
 ACDIS_hh <- haven::read_dta(paste0(data_dir,stata_data_file))
 
+### Extract year from visit date 
+
+ACDIS_hh$Visit_Year <- lubridate::year(ACDIS_hh$VisitDate)
+
+### Move Visit data column
+ACDIS_hh  <- ACDIS_hh  %>% relocate(Visit_Year, .after=VisitDate)
+
 
 ### Recoding and normalising variables 
 ### For each variable recode such that 1 represents the most wealthy and 0 least wealthy 
@@ -290,6 +297,7 @@ ACDIS_hh$VAC[as.integer(ACDIS_hh$VAC)== 9] <- NA
 asset_list <- c("HHIntId",
                 "BSIntId",
                 "VisitDate",
+                "Visit_Year",
                 "water_norm",
                 "toilet_norm",
                 "electric",
@@ -346,12 +354,12 @@ asset_list <- c("HHIntId",
 
 ass_data <- ACDIS_hh[,asset_list]
 
-### Extract year from visit date 
-
-ass_data$Visit_Year <- lubridate::year(ass_data$VisitDate)
-
-### Move Visit data column
-ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
+# ### Extract year from visit date 
+# 
+# ass_data$Visit_Year <- lubridate::year(ass_data$VisitDate)
+# 
+# ### Move Visit data column
+# ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
 
 
 ### Count number of visits per year per household
@@ -385,7 +393,7 @@ for (i in start_year:end_year) {
   ### Drop any rows with NA values 
   ass_data_tmp <-  na.omit(ass_data_tmp)
   ### Split data frame to asset data and identifiers
-  ass_data_tmp_head <- ass_data_tmp[1:4]
+  ass_data_tmp_head <- ass_data_tmp[c(1,2,4)]
   ass_data_tmp_tail <- ass_data_tmp[5:(ncol(ass_data_tmp) - 1)]
   ### Drop columns with Sum = 0 (i.e. all 0 ) 
   ass_data_tmp_tail <-  ass_data_tmp_tail[, colSums(ass_data_tmp_tail != 0) > 0]
@@ -393,9 +401,9 @@ for (i in start_year:end_year) {
   # Run PCA 
   prn<-psych::principal(ass_data_tmp_tail, rotate="varimax", nfactors=3,covar=T, scores=TRUE)
   #prn<-psych::principal(ass_data_tmp[,4:10], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
-  # Calculate Wealth quintiles 1 = poorest to 5 = richest
+  # Calculate Wealth quantiles 1 = poorest to n = richest
   ass_data_tmp_head$prn_score <- prn$scores[,1]
-  ass_data_tmp_head$wealth_quintile <-  schoRsch::ntiles(ass_data_tmp_head, dv = "prn_score", bins=5)
+  ass_data_tmp_head$wealth_quantile <-  schoRsch::ntiles(ass_data_tmp_head, dv = "prn_score", bins=3)
   
   ### Append to overall dataframe      
   if(exists("ass_data_all")==FALSE) {
@@ -406,10 +414,55 @@ for (i in start_year:end_year) {
   }
 }  
 
+#### Merge with Epi data 
 
-  
+stata_data_file <- "/SurveillanceEpisodesHIV.dta"
+ACDIS_epi <- haven::read_dta(paste0(data_dir,stata_data_file))
+
+### Need to select Visit_Year as mid point in episode from epi file 
+### Merge on HHIntId = HouseholdId and Visit_Year = Mid_Visit_year
+
+ACDIS_epi$Start_Year <- lubridate::year(ACDIS_hh$VisitDate)
 
 
+
+
+ACDIS_hh_quant <- merge(ass_data_all,ACDIS_hh,by= (c("HHIntId","BSIntId","Visit_Year")))
+
+
+### Split dataframe into subsets based on quantile value
+
+ass_data_quant <- split(ACDIS_hh_quant, ACDIS_hh_quant$wealth_quantile, drop = TRUE)
+
+ass_data_q1 <- ass_data_quant[[1]]
+ass_data_q2 <- ass_data_quant[[2]]
+ass_data_q3 <- ass_data_quant[[3]]
+
+
+
+## q1 data
+R_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.RDS")
+ST_fname_SES_q1 <- paste0(data_dir,"/q1_SES_Data.dta")
+### Saving as RDS file
+saveRDS(ass_data_q1, file = R_fname_SES_q1) 
+### Saving as a '.dta' file 
+haven::write_dta(ass_data_q1,ST_fname_SES_q1) 
+
+## q2 data
+R_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.RDS")
+ST_fname_SES_q2 <- paste0(data_dir,"/q2_SES_Data.dta")
+### Saving as RDS file
+saveRDS(ass_data_q2, file = R_fname_SES_q2) 
+### Saving as a '.dta' file 
+haven::write_dta(ass_data_q2,ST_fname_SES_q2) 
+
+## q3 data 
+R_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.RDS")
+ST_fname_SES_q3 <- paste0(data_dir,"/q3_SES_Data.dta")
+### Saving as RDS file
+saveRDS(ass_data_q3, file = R_fname_SES_q3) 
+### Saving as a '.dta' file 
+haven::write_dta(ass_data_q3,ST_fname_SES_q3) 
 
 
 
