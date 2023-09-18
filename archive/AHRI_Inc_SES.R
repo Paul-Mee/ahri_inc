@@ -30,7 +30,7 @@ source(paste0(code_dir,"test_ahri.R"))
 
 # Define vector of package names
 
-package_names <- c('haven','dplyr','survival','psych','lubridate')
+package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -418,35 +418,23 @@ ass_data <- ass_data %>% arrange(HHIntId, VisitDate) %>%
   mutate(rank = rank(-as.numeric(VisitDate)))
 
 ### If two visits in a year just use first 
-#ass_data <- ass_data %>% filter(rank==1)
+ass_data <- ass_data %>% filter(rank==1)
+
+
 
 
 ass_data_2021 <- ass_data %>% filter(Visit_Year == 2021)
 ### Drop any rows with NA values 
 ass_data_2021 <-  na.omit(ass_data_2021)
+# Run PCA 
+#prn<-psych::principal(ass_data_2021[,4:(ncol(ass_data_2021)-1)], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
+prn<-psych::principal(ass_data_2021[,4:10], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
 
+# Calculate Wealth quintiles 1 = poorest to 5 = richest
+ass_data_2021$prn_score <- prn$scores[,1]
+ass_data_2021$wealth_quintile <-  schoRsch::ntiles(ass_data_2021, dv = "prn_score", bins=5)
+  
 
-prn<-psych::principal(ass_data_2021[,4:(ncol(ass_data_2021)-1)], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
-
-### In loop select each year from 2004 to 2023 
-### Calculate quintiles for that year 
-
-### Ref https://rpubs.com/Sternonyos/526030 
-
-# library(psych)
-# prn<-psych::principal(mydata2$data2[,2:21], rotate="varimax", nfactors=3,covar=T, scores=TRUE)
-# index=prn$scores[,1]
-# After getting the scores. Breakdown the scores into quintiles i.e. 5 equal groups. It is possible since the scores are continous. They are ranked on a scale, and can thus be categorized into groups. The lowest quintile (quintile 1) represent the bottom 20% i.e. poorest, and the upper quintile are the wealthiest i.e. top 20% of the population.
-# 
-# nlab<-c(1,2,3,4,5)
-# newdata<-mutate(mydata2$data2,quintile=as.factor(cut(index,breaks=5,labels=nlab)))
-
-### Link to surveillance data  
-
-
-### Calculate incidence by wealth quintile for each year 
-
-### Graph
 
 
 

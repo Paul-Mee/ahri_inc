@@ -1,9 +1,12 @@
+# 
+# This version calculates overall incidence
+#
 # Clear any existing data from the data set
 rm(list = ls())
 # Increase R studio columns viewed
 rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
 
-# The first thing to do is set the file paths to the AHRI datasets. 
+
 
 
 data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
@@ -48,32 +51,26 @@ hiv_fname="RD05-99 ACDIS HIV All.dta"
 wgh_fname="RD03-99 ACDIS WGH ALL.dta"
 mgh_fname="RD04-99 ACDIS MGH ALL.dta" 
 bsi_fname="RD01-03 ACDIS BoundedStructures.dta"
+epi_name = "SurveillanceEpisodesHIV.dta"
 
-start_year = 2004
-end_year = 2023
-n_fact = 3 # Number of quantiles in SES
+start_year = 2005
+end_year = 2022
+
 sim_num = 10 # Multiple imputation simulations 
 age_min = 15 # minimum age for incidence calculation
-age_max = 65 # maximum age for incidence calculation
-gender = "Mal" # Include Males (Mal) Females (Fem) or both (All)
-plot_title = "Incidence by wealth quantile - Men"
-plot_fname = "/Inc_SES_male.png"
-
-# for (i in 1:n_fact) {
-# i= 1 
-    ST_fname_SES_q <- paste0("Surv_SES_Data.dta")
-    #print(i) 
-    print(paste0("Reading Stata file - ",ST_fname_SES_q))
+age_max = 49 # maximum age for incidence calculation
+gender = "Fem" # Include Males (Mal) Females (Fem) or both (All)
+plot_title = "Incidence by year- Female (Age 15 to 49)"
+plot_fname = "/Inc_SES_fem.png"
 
     getFiles <- setFiles(folder=data_dir,
                          hivfile=hiv_fname,
-                         epifile=ST_fname_SES_q,
+                         epifile=epi_name,
                          wghfile=wgh_fname, 
                          mghfile=mgh_fname, 
                          bsifile=bsi_fname)
     getFiles()[1:5]
-    readEpisodes(dropTasP=TRUE, addVars="wealth_quantile")
-    
+    readEpisodes()
     getBirthDate()
 
     #Read the HIV data and set the Years of interest, and set gender and  age groups
@@ -122,47 +119,37 @@ plot_fname = "/Inc_SES_male.png"
     # Check where 10 imputations is set 
 
    SES_inc <- MIpredict(mod, newdata=age_dat)
-   SES_inc$quantile <- i
-   
+
+
+### Reorder columns
    SES_inc$Year <- row.names(SES_inc)
    row.names(SES_inc) <- NULL
-   
-   ### Append to overall dataframe      
-   if(exists("SES_inc_all")==FALSE) {
-     SES_inc_all <- SES_inc}
-   else{
-     SES_inc_all <-  rbind(SES_inc_all ,SES_inc)}
-#    i = i+ 1 
-# }
 
-### Reorder rows 
-SES_inc_all <- SES_inc_all[, c("Year", "quantile", "fit","se.fit","lci","uci")] 
+SES_inc<- SES_inc[, c("Year", "fit","se.fit","lci","uci")]    
+names(SES_inc)[2] <- "Incidence"
+names(SES_inc)[3] <- "se.inc"
 
-names(SES_inc_all)[3] <- "Incidence"
-names(SES_inc_all)[4] <- "se.inc"
-
-SES_inc_all$quant_fact <- as.factor(SES_inc_all$quantile)
-SES_inc_all$Year_num <- as.integer(SES_inc_all$Year)
+SES_inc$Year_num <- as.integer(SES_inc$Year)
 
 ## Output data
-R_fname <- paste0(data_dir,"/SEP_Inc.RDS")
+R_fname <- paste0(data_dir,"/Overall_Inc.RDS")
 
 ### Saving as RDS file
-saveRDS(SES_inc_all, file = R_fname) 
+saveRDS(SES_inc, file = R_fname) 
 
 
 ### Plotting 
 
-## select data up to max year
+## select data between min and  max year
 
-max_year <- 2022
 
-SES_inc_plot <- SES_inc_all %>% filter(Year_num <= max_year)
+
+inc_plot <- SES_inc %>% filter(Year_num >= start_year  & Year_num <= end_year )
 
 # Make the plot
 
-p1 <- ggplot(data=SES_inc_plot, aes(x=Year_num, y=Incidence, group=quant_fact,
-                             color=quant_fact,ymin=lci, ymax=uci)) +
+p1 <- ggplot(data=inc_plot, aes(x=Year_num, y=Incidence, 
+                             ymin=lci, ymax=uci)) +
 geom_line() +
 geom_errorbar( width=.2) +
   theme_classic() +
@@ -170,8 +157,7 @@ geom_errorbar( width=.2) +
   #scale_color_brewer(palette="BrBG") +
   theme_igray() + scale_colour_colorblind() +
   scale_x_continuous(name ="Year",breaks = seq(2004,2022, by = 1)) +
-  labs(color='Wealth Quantile',
-       title = plot_title)
+  labs(title = plot_title)
 p1
 
 

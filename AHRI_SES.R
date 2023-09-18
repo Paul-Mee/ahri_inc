@@ -430,27 +430,31 @@ ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
 ACDIS_epi_quant <- merge(ass_data_all,ACDIS_epi, by.x= (c("HHIntId","Visit_Year")),
                                                 by.y = (c("HouseholdId","Mid_Year")))
 
-
-### Split dataframe into subsets based on quantile value
-ACDIS_epi_quant_sp <- split(ACDIS_epi_quant, ACDIS_epi_quant$wealth_quantile, drop = TRUE)
-
-### In a for loop produce the individual files for each quantile
-
-
-for (i in 1:n_fact) {
-print(i)
-
-ACDIS_epi_q <- ACDIS_epi_quant_sp [[i]]
-ST_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.dta")
-R_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.RDS")
-### Saving as RDS file
-saveRDS(ACDIS_epi_q, file = R_fname_SES_q) 
-print(paste0("Writing RDS file - ",R_fname_SES_q))
-
-### Saving as a '.dta' file 
-haven::write_dta(ACDIS_epi_q,ST_fname_SES_q) 
+ST_fname_SES_q <- paste0(data_dir,"/Surv_SES_Data.dta")
+### Saving overall data as a '.dta' file 
+haven::write_dta(ACDIS_epi_quant,ST_fname_SES_q) 
 print(paste0("Writing Stata file - ",ST_fname_SES_q))
-}
+
+
+# ### Split dataframe into subsets based on quantile value
+# ACDIS_epi_quant_sp <- split(ACDIS_epi_quant, ACDIS_epi_quant$wealth_quantile, drop = TRUE)
+# 
+# ### In a for loop produce the individual files for each quantile
+# 
+# 
+# for (i in 1:n_fact) {
+#     print(i)
+#     ACDIS_epi_q <- ACDIS_epi_quant_sp [[i]]
+#     ST_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.dta")
+#     R_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.RDS")
+#     ### Saving as RDS file
+#     saveRDS(ACDIS_epi_q, file = R_fname_SES_q) 
+#     print(paste0("Writing RDS file - ",R_fname_SES_q))
+#     
+#     ### Saving as a '.dta' file 
+#     haven::write_dta(ACDIS_epi_q,ST_fname_SES_q) 
+#     print(paste0("Writing Stata file - ",ST_fname_SES_q))
+# }
 
 
 
