@@ -11,6 +11,7 @@ rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
 
 
 data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
+code_dir <- 'C:/github/avdm_code_download/R/'
 
 # Define vector of package names
 
@@ -20,6 +21,42 @@ package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','pl
 # This code installs all the other required packages if they are not currently installed and load all the libraries
 
 pacman::p_load(char=package_names)
+
+### Source AHRI libraries
+
+source(paste0(code_dir,"ahri.R"))
+source(paste0(code_dir,"data.R"))
+source(paste0(code_dir,"getARTData.R"))
+source(paste0(code_dir,"getBSData.R"))
+source(paste0(code_dir,"getEpisodes-PM.R"))
+source(paste0(code_dir,"getFiles.R"))
+source(paste0(code_dir,"getHealthData.R"))
+source(paste0(code_dir,"getHIV.R"))
+source(paste0(code_dir,"getIncidence.R"))
+source(paste0(code_dir,"imputeMethods.R"))
+source(paste0(code_dir,"intCens.R"))
+source(paste0(code_dir,"setArgs.R"))
+source(paste0(code_dir,"setData.R"))
+source(paste0(code_dir,"splitData-PM.R"))
+source(paste0(code_dir,"test_ahri.R"))
+
+### Load filenames 
+
+
+hiv_fname="RD05-99 ACDIS HIV All.dta"
+wgh_fname="RD03-99 ACDIS WGH ALL.dta"
+mgh_fname="RD04-99 ACDIS MGH ALL.dta" 
+bsi_fname="RD01-03 ACDIS BoundedStructures.dta"
+epi_fname="SurveillanceEpisodesHIV.dta"
+
+### Load AHRI files 
+
+getFiles <- setFiles(folder=data_dir,
+                     hivfile=hiv_fname,
+                     epifile=epi_fname,
+                     wghfile=wgh_fname, 
+                     mghfile=mgh_fname, 
+                     bsifile=bsi_fname)
 
 
 ### Loading Household Asset data 
@@ -364,7 +401,7 @@ ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
 ### Count number of visits per year per household
 
 # ranking by HHID and Visit Date 
-
+## Rewrite this for consistency 
 ## Convert to data.table
 ass_data <- data.table(ass_data)
 ## Use data.table::setkey to sort
@@ -430,11 +467,50 @@ ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
 ACDIS_epi_quant <- merge(ass_data_all,ACDIS_epi, by.x= (c("HHIntId","Visit_Year")),
                                                 by.y = (c("HouseholdId","Mid_Year")))
 
-ST_fname_SES_q <- paste0(data_dir,"/Surv_SES_Data.dta")
-### Saving overall data as a '.dta' file 
-haven::write_dta(ACDIS_epi_quant,ST_fname_SES_q) 
-print(paste0("Writing Stata file - ",ST_fname_SES_q))
 
+
+
+# ST_fname_SES_q <- paste0(data_dir,"/Surv_SES_Data.dta")
+# ### Saving overall data as a '.dta' file 
+# haven::write_dta(ACDIS_epi_quant,ST_fname_SES_q) 
+#print(paste0("Writing Stata file - ",ST_fname_SES_q))
+R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
+### Saving as RDS file
+saveRDS(ACDIS_epi_quant  , file = R_fname_SES)
+
+
+
+
+# ### Load ACDIS_epi_quant 
+# R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
+# ### Load  RDS file
+# ACDIS_epi_SES <- readRDS(R_fname_SES)
+### Select Required variables
+Ind_SES <-  ACDIS_epi_quant[c('IIntId','Visit_Year','wealth_quantile')]
+
+### Create a data file with SES data for each HIV episode
+### Load HIV data and merge SES variable
+hiv <- getHIV()
+### Merge with hiv on IintId and keep all HIV episodes (Left join)
+hiv_SES <- merge(hiv,Ind_SES,by.x='IIntID',by.y='IIntId',all.x=TRUE)
+### Select nearest year for Asset status
+hiv_SES$year_diff = (hiv_SES$Year - hiv_SES$Visit_Year)
+hiv_SES$year_diff_abs  = abs(hiv_SES$Visit_Year - hiv_SES$Year)
+## Ranking by Individual Id , Year, year_diff
+hiv_SES <- hiv_SES %>%
+  group_by(IIntID,VisitDate) %>%
+  dplyr::mutate(rank = order(order(year_diff_abs,-1*year_diff, decreasing=FALSE)))
+
+### test for dropped Id's
+hiv_SES_yr__Id <- unique(hiv_SES[c('IIntID','VisitDate')])
+hiv_yr_Id <- unique(hiv[c('IIntID','VisitDate')])
+
+### Keep top ranked value
+hiv_SES <- hiv_SES %>% filter(rank==1)
+### Keep version with Year and Wealth Quantile
+Vis_SES <- unique(hiv_SES[c('IIntID','VisitDate','wealth_quantile')])
+R_fname_SES <- paste0(data_dir,"/Vis_SES_Data.RDS")
+saveRDS(Vis_SES,file= R_fname_SES)
 
 # ### Split dataframe into subsets based on quantile value
 # ACDIS_epi_quant_sp <- split(ACDIS_epi_quant, ACDIS_epi_quant$wealth_quantile, drop = TRUE)

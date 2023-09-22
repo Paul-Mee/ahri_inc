@@ -63,19 +63,16 @@ epi_fname="SurveillanceEpisodesHIV.dta"
 
 
 start_year = 2005
-end_year = 2023
+end_year = 2022
 #n_fact = 3 # Number of quantiles in SES
-sim_num = 1000 # Multiple imputation simulations 
+sim_num = 10 # Multiple imputation simulations 
 age_min = 15 # minimum age for incidence calculation
 age_max = 54 # maximum age for incidence calculation
 gender = "male" # Include Males (male) Females (female) or both (all)
 # plot_title = "Incidence by wealth quantile - Men"
 # plot_fname = "/Inc_SES_male.png"
 
-# for (i in 1:n_fact) {
-# i= 1 
-    #epi_fname <- paste0("Surv_SES_Data.dta")
-    #print(i)
+
     print(paste0("Reading Stata file - ",epi_fname))
 
     getFiles <- setFiles(folder=data_dir,
@@ -90,7 +87,7 @@ gender = "male" # Include Males (male) Females (female) or both (all)
     
     
     
-    getBirthDate()
+    #getBirthDate()
 
     #Read the HIV data and set the Years of interest, and set gender and  age groups
     if(gender=="all") {
@@ -112,81 +109,36 @@ gender = "male" # Include Males (male) Females (female) or both (all)
                         imputeMethod=imputeRandomPoint, nSim=sim_num)
         }      
     
-    ### Load ACDIS_epi_quant from ACDIS_hh
-    R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
-    ### Load  RDS file
-    ACDIS_epi_SES <- readRDS(R_fname_SES)
-    ### Select Required variables
-    Ind_SES <-  ACDIS_epi_SES[c('IIntId','Visit_Year','wealth_quantile')]
-   
-    
-     ### Load HIV data 
-    #hiv <- getHIV()
-    hiv <- setHIV(Args)
-    ### Merge with hiv on IintId
-    hiv_SES <- merge(hiv,Ind_SES,by.x='IIntID',by.y='IIntId')
-    ### Select nearest year for Asset status
-    hiv_SES$year_diff = (hiv_SES$Year - hiv_SES$Visit_Year)
-    hiv_SES$year_diff_abs  = abs(hiv_SES$Visit_Year - hiv_SES$Year)
-    ## Ranking by Individual Id , Year, year_dif
-    ## Convert to data.table
-    hiv_SES <- hiv_SES %>%
-                group_by(IIntID,Year) %>%
-                mutate(rank = order(order(year_diff_abs,-1*year_diff, decreasing=FALSE)))
-    ### Keep top ranked value
-    hiv_SES <- hiv_SES %>% filter(rank==1)
-    
-    ###
-    sformula = "sero_event ~ -1 + as.factor(Year) + wealth_quantile + as.factor(Year):wealth_quantile + offset(log(tscale))"
-    rtdat <- getRTData(hiv_SES)
-    rtdat <- merge(rtdat,hiv_SES,by=c('IIntID','Year'))
-    ### Select required variables
-    rtdat <-  rtdat[c('IIntID','Year','Female.x','obs_start','late_neg','early_pos','sero_event','wealth_quantile')]
-    names(rtdat)[3] <- "Female"
-    mdat <- MIdata(rtdat, Args)
-    mdat <- mitools::imputationList(mdat)
-    mods <- with(mdat, stats::glm(as.formula(sformula), family=poisson))
-    
-    # used in predict step to estimate by year
-    newdata <- group_by(sdat, Year) %>% summarize(SES = mean(SES)) %>%
-      mutate(Year = factor(Year), tscale = 1)
-    pois_inc <- MIpredict(mods, newdata)
-    ####
-    
-    ### Keep required variables
-    
-    
-    #hiv1 <- setHIV(Args, dat=hiv)
-    
-    # hdat <- readHIVData(write_rda=FALSE)
-    # hdat1 <- setHIV(Args, dat=hdat)
-    #' # Pass in existing data as an argument
-    #' hdat <- readHIVData(write_rda=FALSE)
-    #' hdat1 <- setHIV(Args, dat=hdat)
-    #### Update Year based on actual census rounds
+    # Load data giving SES for each year of HIV data 
+    R_fname_SES <- paste0(data_dir,"/Yr_SES_Data.RDS")
+    Year_SES <- readRDS(R_fname_SES)
+
     ##Fixing Year values for rounds effected by Covid
-    
-    # 2020 round       
-    # hiv$Year[hiv$VisitDate >= "2020-01-21" & hiv$VisitDate <= "2021-04-20"] <- 2020
-    # # 2021 round 
-    # hiv$Year[hiv$VisitDate >= "2021-04-21" & hiv$VisitDate <=  "2022-05-18"] <- 2021
-    # # 2022 round 
-    # hiv$Year[hiv$VisitDate >= "2022-05-19" & hiv$VisitDate <= "2023-05-05"] <- 2022
-    # # 2023 round 
-    # hiv$Year[hiv$VisitDate >= "2023-05-06"] <- 2023
+    hiv <- getHIV()
+    # 2020 round
+    hiv$Year[hiv$VisitDate >= "2020-01-21" & hiv$VisitDate <= "2021-04-20"] <- 2020
+    # 2021 round
+    hiv$Year[hiv$VisitDate >= "2021-04-21" & hiv$VisitDate <=  "2022-05-18"] <- 2021
+    # 2022 round
+    hiv$Year[hiv$VisitDate >= "2022-05-19" & hiv$VisitDate <= "2023-05-05"] <- 2022
+    # 2023 round
+    hiv$Year[hiv$VisitDate >= "2023-05-06"] <- 2023
     
     rtdat <- getRTData(hiv)
     idat <- getIncData(rtdat, bdat=getBirthDate(), Args)
+    ## Merge with a file including SES for each HIV episode
+    idat <- merge(idat,Year_SES,by=c('IIntID','Year'))
     levels(idat$AgeCat)
-    idat <- dplyr::mutate(idat, Year = as.factor(Year))
-
-    #sformula = "sero_event ~ -1 + as.factor(Year) + Age + as.factor(Year):Age + offset(log(tscale))"
-    sformula = "sero_event ~ -1 + as.factor(Year) + Age + as.factor(Year):Age + offset(log(tscale))"
+    idat <- dplyr::mutate(idat, Year = as.factor(Year),wealth_quantile = as.factor(wealth_quantile))
+    sformula = "sero_event ~ -1 + as.factor(Year) + wealth_quantile + as.factor(Year):wealth_quantile + offset(log(tscale))"
     mod <- stats::glm(as.formula(sformula), data=idat, family=poisson)
     summary(mod)
     
 
     age_dat <- getAgeYear(dat=setHIV(Args))
+    
+
+    
 
     # Calculate the age-adjusted HIV incidence rates from n_sim imputed datasets
     # Check where 10 imputations is set 
@@ -194,18 +146,18 @@ gender = "male" # Include Males (male) Females (female) or both (all)
    SES_inc <- MIpredict(mod, newdata=age_dat)
    #SES_inc$quantile <- i
    
-SES_inc$Year <- row.names(SES_inc)
-row.names(SES_inc) <- NULL
+# SES_inc$Year <- row.names(SES_inc)
+# row.names(SES_inc) <- NULL
 
 
 # ### Reorder rows 
-SES_inc <- SES_inc[, c("Year", "fit","se.fit","lci","uci")] 
+# SES_inc <- SES_inc[, c("Year", "fit","se.fit","lci","uci")] 
+# # 
+# names(SES_inc)[2] <- "Incidence"
+# names(SES_inc)[3] <- "se.inc"
 # 
-names(SES_inc)[2] <- "Incidence"
-names(SES_inc)[3] <- "se.inc"
-
-fnam_csv <- paste0("/inc_",as.character(age_min),"-",as.character(age_max),"-",gender,
-                   as.character(start_year),"-",as.character(end_year),".csv")
+# fnam_csv <- paste0("/inc_",as.character(age_min),"-",as.character(age_max),"-",gender,
+#                    as.character(start_year),"-",as.character(end_year),".csv")
 
 
 
