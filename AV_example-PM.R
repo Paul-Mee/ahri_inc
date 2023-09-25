@@ -30,7 +30,8 @@ source(paste0(code_dir,"test_ahri.R"))
 
 # Define vector of package names
 
-package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr')
+package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','survival',
+                   'ggsurvfit')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -140,9 +141,27 @@ mdat[[i]]  <- mdat[[i]]  %>%
 mdat[[i]]$wealth_quantile <- as.integer(mdat[[i]]$wealth_quantile)
 }
 
- temp2.df <- mdat[[1]]
-# temp22.df <- mdat[[2]]
-# temp32.df <- mdat[[3]]
+ temp1.df <- mdat[[1]]
+ temp2.df <- mdat[[2]]
+ temp3.df <- mdat[[3]]
+ 
+## Horrible code to get mean serodate
+ 
+t2.df <- temp2.df[c('IIntID','Year','sero_date')]
+names(t2.df)[3] <- "sero_date2"
+
+t3.df <- temp3.df[c('IIntID','Year','sero_date')]
+names(t3.df)[3] <- "sero_date3"
+ 
+temp1.df <- merge(temp1.df,t2.df,by=(c('IIntID','Year')))
+temp1.df <- merge(temp1.df,t3.df,by=(c('IIntID','Year')))
+
+
+
+ temp1.df$mean_sero_date <- mean.Date(c('sero_date','sero_date2'), na.rm=TRUE)
+
+temp1.df$mean_sero_date <- as.Date(temp1.df$mean_sero_date)
+
 
 #sformula = "sero_event ~ -1 + as.factor(wealth_quantile) +  as.factor(Year) +   offset(log(tscale))"
  
@@ -155,6 +174,11 @@ agg_inc <- MIaggregate(agg_inc)
 
 
 mdat <- mitools::imputationList(mdat)
+
+m_1.df <- mdat[[1]]
+# m_1.df <- mdat[[2]]
+# m_1.df <- mdat[[3]]
+
 mods <- with(mdat, stats::glm(as.formula(sformula), family=poisson))
 
 # used in predict step to estimate by year
@@ -246,3 +270,93 @@ p1
 
 ggsave(paste0(data_dir,plot_fname),p1,  width=20, height=15, units="cm")
 
+###  KM curve code 
+
+km_start_year <- 2013
+km_end_year <- 2022
+
+Inc <- temp2.df[temp2.df$Year %in% c(km_start_year:km_end_year),]
+
+Inc <- Inc %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(first_start_yr = lubridate::year(min(obs_start)))
+
+### Earliest start date
+
+Inc <- Inc %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(first_start_date = (min(obs_start)))
+
+### Keep those included in start_year
+
+Inc <- Inc[Inc$first_start_yr == km_start_year,]
+
+# datee <- as.Date("2017-12-31") ## Event = dead or end of observation
+# Inc$Event_Date <- ifelse(is.na(Inc$sero_date), datee, Inc$sero_date)
+# Inc$Event_Date <- as.Date(Inc$Event_Date)
+
+Sero <- Inc[Inc$sero_event == 1, ]
+Sero$ntime <- Sero$sero_date - Sero$first_start_date
+
+Non_Sero <- Inc[Inc$sero_event == 0, ]
+
+##Keep distinct with earliest start date
+NNon_Sero <- Non_Sero %>% group_by(IIntID) %>% dplyr::slice(which.max(obs_end))
+NNon_Sero$ntime <- NNon_Sero$obs_end - NNon_Sero$first_start_date
+
+##Rbind with sero data
+
+T_Inc <- rbind(NNon_Sero, Sero)
+
+### Two records for those who convert
+### Ranking by sero-status
+## Ranking by Individual Id , Year, year_diff
+T_Inc <- T_Inc %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(rank = order(sero_event, decreasing=TRUE))
+
+### For sero converters remove duplicate
+T_Inc <- T_Inc[T_Inc$rank==1,]
+
+### Remove NA 
+T_Inc <- T_Inc[!is.na(T_Inc$wealth_quantile),]
+
+
+
+### Add label for wealth_quantile
+
+T_Inc$SES <- ""
+
+T_Inc <- within(T_Inc, SES[wealth_quantile==1] <- "Wealthiest")
+T_Inc <- within(T_Inc, SES[wealth_quantile==2] <- "Middle")
+T_Inc <- within(T_Inc, SES[wealth_quantile==3] <- "Poorest")
+
+T_Inc$SES <- factor(T_Inc$SES,
+                      levels = c("Wealthiest", "Middle", "Poorest"))
+
+survfit(Surv(ntime, sero_event) ~ SES, data = T_Inc)
+
+
+
+plot_title <- paste0("KM curves (failure = seroconversion) \n For those under observation in ",km_start_year," - censoring in ",km_end_year)
+
+
+
+
+p2 <-  survfit(Surv(ntime, sero_event) ~ SES, data = T_Inc)%>% 
+  ggsurvfit() +
+  labs(
+    x = "Days to serconversion",
+    y = "Overall probaility of remaining HIV negative",
+    title = plot_title
+  )
+p2
+surv_diff <- survdiff(Surv(ntime, sero_event) ~ SES, data = T_Inc)
+surv_diff
+
+p2
+
+
+plot_fname <- paste0("/km_",km_start_year,"_",km_end_year,".png")
+
+ggsave(paste0(data_dir,plot_fname),p2,  width=20, height=15, units="cm")
