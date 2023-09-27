@@ -31,7 +31,7 @@ source(paste0(code_dir,"test_ahri.R"))
 # Define vector of package names
 
 package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','survival',
-                   'ggsurvfit')
+                   'ggsurvfit','survivalAnalysis')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -59,7 +59,7 @@ epi_fname="SurveillanceEpisodesHIV.dta"
 start_year = 2005
 end_year = 2022
 #n_fact = 3 # Number of quantiles in SES
-sim_num = 3 # Multiple imputation simulations 
+sim_num = 2 # Multiple imputation simulations 
 age_min = 15 # minimum age for incidence calculation
 age_max = 54 # maximum age for incidence calculation
 gender = "all" # Include Males (male) Females (female) or both (all)
@@ -116,7 +116,7 @@ aggFun = AggBySESYear
 rtdat <- getRTData(hiv)
 mdat <- MIdata(rtdat, Args)
 
-temp.df <- mdat[[1]]
+#temp.df <- mdat[[1]]
 
 # temp11.df <- mdat[[1]]
 # temp12.df <- mdat[[2]]
@@ -132,35 +132,36 @@ Yr_SES <- unique(Vis_SES[c('IIntID','Year','wealth_quantile')])
 
 ### Merge each dataframe in mdat with actual SES for that year and replace 
 ### wealth quantile with mean of other values if no SES for that year 
+#tmp_m_1.df <- mdat[[1]]
+
 for (i in 1:sim_num) {
 print(i)
 mdat[[i]]  <- merge(mdat[[i]] ,Yr_SES,by=c('IIntID','Year'),all.x=TRUE)
 mdat[[i]]  <- mdat[[i]]  %>% 
   group_by(IIntID) %>% 
   mutate_at(c('wealth_quantile'), zoo::na.aggregate)
-mdat[[i]]$wealth_quantile <- as.integer(mdat[[i]]$wealth_quantile)
+  mdat[[i]]$wealth_quantile <- as.integer(mdat[[i]]$wealth_quantile)
+  # Calculating the mean serodate - updating for each iteration 
+  m_tmp.df <- mdat[[i]] 
+  if (i==1) {
+    m_all.df <- m_tmp.df
+    m_all.df$mean_sero_date  <- m_all.df$sero_date
+  } else {
+    m_tmp2.df <- m_tmp.df[c('IIntID','Year','sero_date')]
+    names(m_tmp2.df)[3] <- "sero_date2"
+    m_all.df <- merge(m_all.df,m_tmp2.df,by=(c('IIntID','Year')))
+    #m_all.df$mean_sero_date <- (m_all.df$mean_sero_date + ((m_all.df$sero_date2 - m_all.df$mean_sero_date) / 2))
+    #m_all.df$mean_sero_date <- mean.Date(m_all.df$mean_sero_date,m_all.df$sero_date2)
+    m_all.df$mean_sero_date <- m_all.df$mean_sero_date  + floor((m_all.df$sero_date2-m_all.df$mean_sero_date)/2)
+    ## Drop sero_date2
+    m_all.df <- select(m_all.df, -c("sero_date2"))
+  }
 }
 
- temp1.df <- mdat[[1]]
- temp2.df <- mdat[[2]]
- temp3.df <- mdat[[3]]
- 
-## Horrible code to get mean serodate
- 
-t2.df <- temp2.df[c('IIntID','Year','sero_date')]
-names(t2.df)[3] <- "sero_date2"
-
-t3.df <- temp3.df[c('IIntID','Year','sero_date')]
-names(t3.df)[3] <- "sero_date3"
- 
-temp1.df <- merge(temp1.df,t2.df,by=(c('IIntID','Year')))
-temp1.df <- merge(temp1.df,t3.df,by=(c('IIntID','Year')))
+m_all.df$sero_date <- m_all.df$mean_sero_date
+m_all.df <- select(m_all.df, -c("mean_sero_date"))
 
 
-
- temp1.df$mean_sero_date <- mean.Date(c('sero_date','sero_date2'), na.rm=TRUE)
-
-temp1.df$mean_sero_date <- as.Date(temp1.df$mean_sero_date)
 
 
 #sformula = "sero_event ~ -1 + as.factor(wealth_quantile) +  as.factor(Year) +   offset(log(tscale))"
@@ -168,6 +169,8 @@ temp1.df$mean_sero_date <- as.Date(temp1.df$mean_sero_date)
 #sformula = "sero_event ~ -1 +   as.factor(Year) + as.factor(wealth_quantile)   + offset(log(tscale))"
 
 sformula = "sero_event ~ -1 +    as.factor(Year):as.factor(wealth_quantile) + as.factor(Year) + as.factor(wealth_quantile)   + offset(log(tscale))"
+## first imputation used for KM
+tmp_m_1.df <- mdat[[1]]
 
 agg_inc <- lapply(mdat, aggFun)
 agg_inc <- MIaggregate(agg_inc)
@@ -175,9 +178,7 @@ agg_inc <- MIaggregate(agg_inc)
 
 mdat <- mitools::imputationList(mdat)
 
-m_1.df <- mdat[[1]]
-# m_1.df <- mdat[[2]]
-# m_1.df <- mdat[[3]]
+
 
 mods <- with(mdat, stats::glm(as.formula(sformula), family=poisson))
 
@@ -193,7 +194,7 @@ mods <- with(mdat, stats::glm(as.formula(sformula), family=poisson))
 #   summarize(Year = as.factor(as.integer(mean(Year,na.rm=TRUE)))) %>%
 #   mutate(wealth_quantile = factor(wealth_quantile), tscale = 1)
 
-newdata <- unique(temp2.df[c('Year','wealth_quantile')])
+newdata <- unique(m_all.df[c('Year','wealth_quantile')])
 newdata <- dplyr::filter(newdata,!is.na(newdata$wealth_quantile))
 newdata <- newdata %>% 
            dplyr::arrange(Year,wealth_quantile)
@@ -272,10 +273,17 @@ ggsave(paste0(data_dir,plot_fname),p1,  width=20, height=15, units="cm")
 
 ###  KM curve code 
 
-km_start_year <- 2013
+km_start_year <- 2015
 km_end_year <- 2022
 
-Inc <- temp2.df[temp2.df$Year %in% c(km_start_year:km_end_year),]
+#Inc <- m_all.df[m_all.df$Year %in% c(km_start_year:km_end_year),]
+Inc <- tmp_m_1.df[tmp_m_1.df$Year %in% c(km_start_year:km_end_year),] # Use first imputation 
+
+### Keep those included in start_year
+
+#Inc <- Inc[Inc$first_start_yr == km_start_year,] # closed cohort starting at beginning
+
+
 
 Inc <- Inc %>%
   group_by(IIntID) %>%
@@ -287,9 +295,9 @@ Inc <- Inc %>%
   group_by(IIntID) %>%
   dplyr::mutate(first_start_date = (min(obs_start)))
 
-### Keep those included in start_year
 
-Inc <- Inc[Inc$first_start_yr == km_start_year,]
+
+
 
 # datee <- as.Date("2017-12-31") ## Event = dead or end of observation
 # Inc$Event_Date <- ifelse(is.na(Inc$sero_date), datee, Inc$sero_date)
@@ -297,6 +305,14 @@ Inc <- Inc[Inc$first_start_yr == km_start_year,]
 
 Sero <- Inc[Inc$sero_event == 1, ]
 Sero$ntime <- Sero$sero_date - Sero$first_start_date
+
+### Drop those sero converting after end of follow-up
+Sero <- Sero[(lubridate::year(Sero$sero_date) <= km_end_year),]
+
+#### Aggregate incidence by group 
+
+
+
 
 Non_Sero <- Inc[Inc$sero_event == 0, ]
 
@@ -328,35 +344,80 @@ T_Inc <- T_Inc[!is.na(T_Inc$wealth_quantile),]
 T_Inc$SES <- ""
 
 T_Inc <- within(T_Inc, SES[wealth_quantile==1] <- "Wealthiest")
-T_Inc <- within(T_Inc, SES[wealth_quantile==2] <- "Middle")
-T_Inc <- within(T_Inc, SES[wealth_quantile==3] <- "Poorest")
+T_Inc <- within(T_Inc, SES[wealth_quantile==2] <- "Medium")
+T_Inc <- within(T_Inc, SES[wealth_quantile==3] <- "Least Wealthy")
 
 T_Inc$SES <- factor(T_Inc$SES,
-                      levels = c("Wealthiest", "Middle", "Poorest"))
+                      levels = c("Wealthiest", "Medium", "Least Wealthy"))
 
-survfit(Surv(ntime, sero_event) ~ SES, data = T_Inc)
+T_Inc$SES_char <- as.character(T_Inc$SES)
+
+#### Aggregate incidence by group 
+
+T_Inc_sum <- T_Inc %>% 
+  group_by(SES) %>%                            # multiple group columns
+  summarise(sum_event = sum(sero_event), sum_ntime = sum(ntime)) 
+
+T_Inc_sum$int_ntime <- as.integer(T_Inc_sum$sum_ntime)
+
+T_Inc_sum$incidence <- (T_Inc_sum$sum_event/T_Inc_sum$int_ntime)*365.25*100
+
+Inc_fname <- paste0(data_dir,"/incidence_",km_start_year,"_",km_end_year,".txt")
+
+sink(Inc_fname)
+T_Inc_sum
+sink()
+T_Inc_sum
 
 
 
-plot_title <- paste0("KM curves (failure = seroconversion) \n For those under observation in ",km_start_year," - censoring in ",km_end_year)
+plot_title <- paste0("Kaplan-Meier plot (failure = seroconversion) \n Open cohort of individuals first tested between  ",km_start_year," and ",km_end_year)
 
 
+#legend.labs= c("Wealthiest", "Medium", "Least Wealthy")
 
+tmp <- survfit(Surv(ntime, sero_event) ~ SES, data = T_Inc)
 
 p2 <-  survfit(Surv(ntime, sero_event) ~ SES, data = T_Inc)%>% 
   ggsurvfit() +
   labs(
     x = "Days to serconversion",
-    y = "Overall probaility of remaining HIV negative",
+    y = "Probability of remaining HIV negative",
     title = plot_title
-  )
+     ) +
+   add_confidence_interval() +
+   theme(plot.title = element_text(hjust = 0.5,),
+        legend.direction='vertical',
+        legend.position = c(0.2, 0.3),
+        legend.text=element_text(size=13))
+
+         
 p2
 surv_diff <- survdiff(Surv(ntime, sero_event) ~ SES, data = T_Inc)
+
+survdiff_fname <- paste0(data_dir,"/surv_diff_",km_start_year,"_",km_end_year,".txt")
+sink(survdiff_fname)
+surv_diff
+sink()
 surv_diff
 
-p2
+
+
 
 
 plot_fname <- paste0("/km_",km_start_year,"_",km_end_year,".png")
 
 ggsave(paste0(data_dir,plot_fname),p2,  width=20, height=15, units="cm")
+
+
+#### Survival Analysis (https://cran.r-project.org/web/packages/survivalAnalysis/vignettes/multivariate.html)
+T_Inc$sex <- as.factor(T_Inc$Female)
+
+
+res.cox <- coxph(Surv(ntime, sero_event) ~ Age + sex + SES , data =  T_Inc)
+
+cox_fname <- paste0(data_dir,"/cox_",km_start_year,"_",km_end_year,".txt")
+sink(cox_fname)
+summary(res.cox)
+sink()
+summary(res.cox)
