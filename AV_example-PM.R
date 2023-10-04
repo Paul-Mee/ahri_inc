@@ -7,7 +7,7 @@ rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
 
 
 data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
-code_dir <- 'C:/github/avdm_code_download/R/'
+code_dir <- 'C:/github/ahri_inc/avdm_ahri_code/R'
 
 ## Running R files 
 
