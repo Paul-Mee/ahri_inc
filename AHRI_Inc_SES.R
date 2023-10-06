@@ -39,7 +39,7 @@ for(i in 1:length(file_list)){
 start_year = 2005
 end_year = 2022
 #n_fact = 3 # Number of quantiles in SES
-sim_num = 10 # Multiple imputation simulations 
+sim_num = 100 # Multiple imputation simulations 
 age_min = 15 # minimum age for incidence calculation
 age_max = 54 # maximum age for incidence calculation
 gender = "all" # Include Males (male) Females (female) or both (all)
@@ -482,19 +482,41 @@ gg1_dat <- data.frame(Year = gg1$data[[1]]$x,
                   uci_sm = gg1$data[[3]]$y,
                   SES = as.factor(gg1$data[[1]]$group))
 
+gg1_dat$SES_char <- ""
+
+gg1_dat <- within(gg1_dat, SES_char[SES==1] <- "Wealthiest")
+gg1_dat <- within(gg1_dat, SES_char[SES==2] <- "Medium")
+gg1_dat <- within(gg1_dat, SES_char[SES==3] <- "Least Wealthy")
+
 ### Add 'ribbon' to plot
 
 plot_fname = "/inc_smooth_ses.png"
 
+#define colors
+COLS = c("red","turquoise","orange")
+names(COLS) = c("Wealthiest","Medium","Least Wealthy")
+
+
 p3 <- ggplot(data = gg1_dat) + 
    theme_bw() +
-   geom_ribbon(aes(x = Year , ymin=lci_sm, ymax=uci_sm,
-                                   group=SES, fill=SES),alpha=0.2,color=NA) +
-   geom_smooth(aes(x=Year, y=Incidence,group=SES,colour=SES,fill=SES), se = FALSE, linetype = "dashed" ) +
-   scale_x_continuous(name ="Year",breaks = seq(2005,2022, by = 1),limits = c(2005, 2022)) +
+   # geom_ribbon(aes(x = Year , ymin=lci_sm, ymax=uci_sm,
+   #                                 group=SES, fill=SES_char),alpha=0.2) +
+   geom_smooth(aes(x=Year, y=Incidence,colour=SES_char,fill=SES_char,group=SES_char), se = FALSE, linetype = "dashed" ) +
+   #scale_x_continuous(name ="Year",breaks = seq(2005,2022, by = 1),limits = c(2005, 2022)) +
    guides(col = "none") +
-   labs(title = plot_title) 
+  # change name of legend here 
+  labs(title = plot_title) 
 p3
+
+X = 1:50
+Data = data.frame(
+  BA=X,
+  BAgp1 = log(X)+rnorm(length(X),0,0.3),
+  BAgp2 = log(X)+rnorm(length(X),0,0.3) + 0.5,
+  BAgp3 = log(X)+rnorm(length(X),0,0.3) + 1)
+
+# convert this to long format, use BA as id
+Data <- Data %>% tidyr::pivot_longer(-BA)
 
 ## Need to fix legend
 
