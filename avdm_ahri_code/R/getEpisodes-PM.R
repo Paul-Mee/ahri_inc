@@ -38,28 +38,28 @@ readEpisodes <- function(
   #   names(dat)[names(dat)=="IIntId"] <- "IndividualId"
   # }
   dat <- select(dat,
-    IIntID=.data$IIntId, BSIntID=.data$LocationId, 
-    Female=.data$Sex, 
-    #.data$Age, 
-    .data$DoB, .data$DoD,
-    #.data$Year, 
-    ExpDays=.data$Days,
-    ObservationStart=.data$StartDate,
-    ObservationEnd=.data$EndDate,
-    .data$InMigration, .data$OutMigration,
-    .data$Resident, 
+    IIntID=IIntId, BSIntID=LocationId, 
+    Female=Sex, 
+    #Age, 
+    DoB, DoD,
+    #Year, 
+    ExpDays=Days,
+    ObservationStart=StartDate,
+    ObservationEnd=EndDate,
+    InMigration, OutMigration,
+    Resident, 
     # Not present in file
-    #  AssetIndex=.data$ModerntAssetIdx,
-    # .data$OnART, .data$EarliestARTInitDate, 
+    #  AssetIndex=ModerntAssetIdx,
+    # OnART, EarliestARTInitDate, 
     matches(addVars))
-  dat <- filter(dat, .data$Female %in% c(1,2))
+  dat <- filter(dat, Female %in% c(1,2))
   dat <- mutate(dat,
-    IIntID=as.integer(.data$IIntID),
-    BSIntID=as.integer(.data$BSIntID),
-    #Year=as.integer(.data$Year),
-    Female=as.integer(ifelse(.data$Female==2, 1, 0)))
+    IIntID=as.integer(IIntID),
+    BSIntID=as.integer(BSIntID),
+    #Year=as.integer(Year),
+    Female=as.integer(ifelse(Female==2, 1, 0)))
   if (dropTasP==TRUE) dat <- dropTasPData(dat)
-  dat <- arrange(dat, .data$IIntID, .data$ObservationStart)
+  dat <- arrange(dat, IIntID, ObservationStart)
   if (write_rda) {
     check_getFiles()
     saveRDS(dat, file = getFiles()$epi_rda)
@@ -118,16 +118,16 @@ setEpisodes <- function(Args=setArgs(), dat=NULL) {
 
 makePropRes <- function(Args) {
   dat <- setEpisodes(Args) 
-  ddat <- select(dat, .data$IIntID, .data$Year,
-    .data$Resident, .data$ExpDays) 
-  ddat <- distinct(ddat, .data$IIntID, .data$Year)
-  gdat <- filter(dat, .data$Resident==1)
-  gdat <- group_by(gdat, .data$IIntID, .data$Year) %>% 
-    summarize(DaysIn = sum(.data$ExpDays)) %>% ungroup()
+  ddat <- select(dat, IIntID, Year,
+    Resident, ExpDays) 
+  ddat <- distinct(ddat, IIntID, Year)
+  gdat <- filter(dat, Resident==1)
+  gdat <- group_by(gdat, IIntID, Year) %>% 
+    summarize(DaysIn = sum(ExpDays)) %>% ungroup()
   adat <- left_join(ddat, gdat, by=c("IIntID", "Year"))
   adat$DaysIn[is.na(adat$DaysIn)] <- 0
-  adat <- mutate(adat, PropRes=round(.data$DaysIn/366, 3)) %>% 
-    select(.data$IIntID, .data$Year, .data$PropRes)
+  adat <- mutate(adat, PropRes=round(DaysIn/366, 3)) %>% 
+    select(IIntID, Year, PropRes)
   # adat <- filter(adat, .adata$PropRes>=Prop)
   adat
 }

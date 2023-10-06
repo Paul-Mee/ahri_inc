@@ -15,7 +15,7 @@ getIncData <- function(rtdat, bdat = NULL, Args, func = identity) {
   dat <- Args$imputeMethod(rtdat)
   edat <- splitAtSeroDate(dat) 
   edat <- setData(edat, Args, time2 = "obs_end", birthdate = bdat)
-  edat <- mutate(edat, tscale = .data$Time/365.25)
+  edat <- mutate(edat, tscale = Time/365.25)
   func(edat)
 }
 
@@ -86,8 +86,8 @@ calcPoisExact <- function(dat, byVar="Year", fmt=TRUE) {
     vars <- c("rate", "lower", "upper")
     dat[vars] <- lapply(dat[vars], function(x) round(x*100, 3))
   }
-  dat <- dplyr::rename(dat, sero_event=.data$x, 
-    pyears=.data$pt, lci=.data$lower, uci=.data$upper)
+  dat <- dplyr::rename(dat, sero_event=x, 
+    pyears=pt, lci=lower, uci=upper)
   dat
 }
 
@@ -102,9 +102,9 @@ calcPoisExact <- function(dat, byVar="Year", fmt=TRUE) {
 #' age_dat <- getAgeYear(dat=setHIV(setArgs()))
 
 getAgeYear <- function(dat) {
-  group_by(dat, .data$Year) %>% 
-  summarize(Age = mean(.data$Age)) %>% 
-  mutate(Year = factor(.data$Year), tscale=1)
+  group_by(dat, Year) %>% 
+  summarize(Age = mean(Age)) %>% 
+  mutate(Year = factor(Year), tscale=1)
 }
 
 
