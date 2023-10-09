@@ -493,9 +493,6 @@ gg1_dat <- within(gg1_dat, Wealth_Status[SES==3] <- "Least Wealthy")
 
 plot_fname = "/inc_smooth_ses.png"
 
-#define colors
-COLS = c("red","turquoise","orange")
-names(COLS) = c("Wealthiest","Medium","Least Wealthy")
 
 
 p3 <- ggplot() + 
