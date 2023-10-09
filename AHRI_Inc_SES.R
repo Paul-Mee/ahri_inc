@@ -472,6 +472,7 @@ g1 <- ggplot(data=SES_inc_plot) +
   stat_smooth(aes(x=Year, y = Incidence, colour = SES), method = "loess", se = FALSE) +
   stat_smooth(aes(x=Year, y = uci, colour = SES), method = "loess", se = FALSE) +
   stat_smooth(aes(x=Year, y = lci, colour = SES), method = "loess", se = FALSE)
+g1
 
 # build plot object for rendering 
 gg1 <- ggplot_build(g1)
@@ -482,11 +483,11 @@ gg1_dat <- data.frame(Year = gg1$data[[1]]$x,
                   uci_sm = gg1$data[[3]]$y,
                   SES = as.factor(gg1$data[[1]]$group))
 
-gg1_dat$SES_char <- ""
+gg1_dat$Wealth_Status <- ""
 
-gg1_dat <- within(gg1_dat, SES_char[SES==1] <- "Wealthiest")
-gg1_dat <- within(gg1_dat, SES_char[SES==2] <- "Medium")
-gg1_dat <- within(gg1_dat, SES_char[SES==3] <- "Least Wealthy")
+gg1_dat <- within(gg1_dat, Wealth_Status[SES==1] <- "Wealthiest")
+gg1_dat <- within(gg1_dat, Wealth_Status[SES==2] <- "Medium")
+gg1_dat <- within(gg1_dat, Wealth_Status[SES==3] <- "Least Wealthy")
 
 ### Add 'ribbon' to plot
 
@@ -497,26 +498,17 @@ COLS = c("red","turquoise","orange")
 names(COLS) = c("Wealthiest","Medium","Least Wealthy")
 
 
-p3 <- ggplot(data = gg1_dat) + 
+p3 <- ggplot() + 
    theme_bw() +
-   # geom_ribbon(aes(x = Year , ymin=lci_sm, ymax=uci_sm,
-   #                                 group=SES, fill=SES_char),alpha=0.2) +
-   geom_smooth(aes(x=Year, y=Incidence,colour=SES_char,fill=SES_char,group=SES_char), se = FALSE, linetype = "dashed" ) +
-   #scale_x_continuous(name ="Year",breaks = seq(2005,2022, by = 1),limits = c(2005, 2022)) +
-   guides(col = "none") +
+   geom_ribbon(data = gg1_dat,aes(x = Year , ymin=lci_sm, ymax=uci_sm,
+                                    group=Wealth_Status, fill=Wealth_Status),alpha=0.2) +
+   geom_smooth(data=gg1_dat,aes(x=Year, y=Incidence,group=Wealth_Status,colour=Wealth_Status), se = FALSE, linetype = "dotted" ) +
+   scale_x_continuous(name ="Year",breaks = seq(2005,2021, by = 1),limits = c(2005, 2021)) +
   # change name of legend here 
-  labs(title = plot_title) 
+  labs(title = plot_title)
 p3
 
-X = 1:50
-Data = data.frame(
-  BA=X,
-  BAgp1 = log(X)+rnorm(length(X),0,0.3),
-  BAgp2 = log(X)+rnorm(length(X),0,0.3) + 0.5,
-  BAgp3 = log(X)+rnorm(length(X),0,0.3) + 1)
 
-# convert this to long format, use BA as id
-Data <- Data %>% tidyr::pivot_longer(-BA)
 
 ## Need to fix legend
 
