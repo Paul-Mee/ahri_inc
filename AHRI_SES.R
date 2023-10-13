@@ -7,49 +7,44 @@ rm(list = ls())
 # Increase R studio columns viewed
 rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
 
-# The first thing to do is set the file paths to the AHRI datasets. 
-
-
+# Set file paths
+## AHRI data
 data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
-code_dir <- 'C:/github/avdm_code_download/R/'
+## Local copy of AHRI R code
+code_dir <- 'C:/github/ahri_inc/avdm_ahri_code/R/'
 
 # Define vector of package names
 
-package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','plyr','data.table')
+package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','data.table',
+                   'imputeTS')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
 
 pacman::p_load(char=package_names)
 
-### Source AHRI libraries
-
-source(paste0(code_dir,"ahri.R"))
-source(paste0(code_dir,"data.R"))
-source(paste0(code_dir,"getARTData.R"))
-source(paste0(code_dir,"getBSData.R"))
-source(paste0(code_dir,"getEpisodes-PM.R"))
-source(paste0(code_dir,"getFiles.R"))
-source(paste0(code_dir,"getHealthData.R"))
-source(paste0(code_dir,"getHIV.R"))
-source(paste0(code_dir,"getIncidence.R"))
-source(paste0(code_dir,"imputeMethods.R"))
-source(paste0(code_dir,"intCens.R"))
-source(paste0(code_dir,"setArgs.R"))
-source(paste0(code_dir,"setData.R"))
-source(paste0(code_dir,"splitData-PM.R"))
-source(paste0(code_dir,"test_ahri.R"))
-
-### Load filenames 
+# File paths
 
 
+### list of R code to be sourced 
+### Needs to be kept in sync between two files - better to use github 
+
+file_list <- c("ahri.R","data.R","getARTData.R","getBSData.R","getEpisodes-PM.R",
+               "getFiles.R","getHealthData.R","getHIV-PM.R","getIncidence-PM.R","imputeMethods.R",
+               "intCens.R","setArgs.R","setData-PM.R","splitData-PM.R","test_ahri.R")
+
+## Source the file in the list
+for(i in 1:length(file_list)){
+  source(paste0(code_dir,file_list[i]))
+}
+
+### Current default AHRI filenames 
 hiv_fname="RD05-99 ACDIS HIV All.dta"
 wgh_fname="RD03-99 ACDIS WGH ALL.dta"
 mgh_fname="RD04-99 ACDIS MGH ALL.dta" 
 bsi_fname="RD01-03 ACDIS BoundedStructures.dta"
 epi_fname="SurveillanceEpisodesHIV.dta"
 
-### Load AHRI files 
 
 getFiles <- setFiles(folder=data_dir,
                      hivfile=hiv_fname,
@@ -57,6 +52,8 @@ getFiles <- setFiles(folder=data_dir,
                      wghfile=wgh_fname, 
                      mghfile=mgh_fname, 
                      bsifile=bsi_fname)
+getFiles()[1:5]
+
 
 
 ### Loading Household Asset data 
@@ -64,9 +61,12 @@ getFiles <- setFiles(folder=data_dir,
 stata_data_file <- '/RD06-99 ACDIS HSE-H All.dta'
 ACDIS_hh <- haven::read_dta(paste0(data_dir,stata_data_file))
 
+
 ### Extract year from visit date 
 
 ACDIS_hh$Visit_Year <- lubridate::year(ACDIS_hh$VisitDate)
+
+#ass_hh_tmp <- ACDIS_hh %>% filter(Visit_Year == 2022)
 
 ### Move Visit data column
 ACDIS_hh  <- ACDIS_hh  %>% relocate(Visit_Year, .after=VisitDate)
@@ -155,12 +155,13 @@ ACDIS_hh$energy_norm <- (max(ACDIS_hh$energy,na.rm = TRUE) - ACDIS_hh$energy)/(m
 table(ACDIS_hh$energy_norm)
 
 
-### Wall materials 
+### Wall materials ### Only used in last 2 or 3 years 
 
 ACDIS_hh$wall_mat <-  NA
 ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 1] <- 3  # Asbestos
 ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 2] <- 1  # Bricks
 ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 3] <- 9  # Cardboard
+ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 4] <- 2  # Cement Block
 ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 5] <- 4  # Corrugated iron
 ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 6] <- 5  # Asbestos
 ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 7] <- 6  # Mud & Cement
@@ -191,6 +192,9 @@ ACDIS_hh$wall_mat[as.integer(ACDIS_hh$WallMaterial)== 28] <- 9  # Vinyl
 ACDIS_hh$wall_mat_norm <- (max(ACDIS_hh$wall_mat,na.rm = TRUE) - ACDIS_hh$wall_mat)/(max(ACDIS_hh$wall_mat,na.rm = TRUE) - min(ACDIS_hh$wall_mat,na.rm = TRUE))
 table(ACDIS_hh$wall_mat_norm)
 
+### data check 
+
+test.df  <- ACDIS_hh %>% dplyr::select('VisitDate','Visit_Year','WallMaterial','wall_mat','wall_mat_norm')
 
 
 ### Roof materials
@@ -199,6 +203,7 @@ ACDIS_hh$roof_mat <-  NA
 ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 1] <- 3  # Asbestos
 ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 2] <- 1  # Bricks
 ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 3] <- 9  # Cardboard
+ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 4] <- 2  # Cement Block
 ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 5] <- 4  # Corrugated iron
 ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 6] <- 5  # Asbestos
 ACDIS_hh$roof_mat[as.integer(ACDIS_hh$RoofMaterial)== 7] <- 6  # Mud & Cement
@@ -339,7 +344,7 @@ asset_list <- c("HHIntId",
                 "electric",
                 "energy_norm",
                 # "wall_mat_norm", 
-                # "roof_mat_norm",
+                #  "roof_mat_norm",
                 "BED",
                 "BIC",
                 "BLM",
@@ -401,139 +406,217 @@ ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
 ### Count number of visits per year per household
 
 # ranking by HHID and Visit Date 
-## Rewrite this for consistency 
-## Convert to data.table
-ass_data <- data.table(ass_data)
-## Use data.table::setkey to sort
-data.table::setkey(ass_data,HHIntId,Visit_Year,VisitDate)
-ass_data[,rank := seq_len(.N),by = .(HHIntId,VisitDate)]
+
+## Ranking by Individual Id , Year, year_diff
+ass_data <- ass_data %>%
+  group_by(HHIntId,Visit_Year) %>%
+  dplyr::mutate(rank = order(order(VisitDate, decreasing=FALSE)))
+
 
 ### If two visits in a year just use first 
 ass_data <- ass_data %>% filter(rank==1)
 
-ass_data <- data.frame(ass_data)
+
+### Setting NA values for wall_mat_norm and roof_mat_norm to 0 
+
+# ass_data$wall_mat_norm[is.na(ass_data$wall_mat_norm)] <- 0
+# ass_data$roof_mat_norm[is.na(ass_data$roof_mat_norm)] <- 0
 
 ### Loop to calculate asset index for each year 
 
 start_year = 2004
-end_year = 2023
-n_fact = 3 # Number of quantiles in SES
+end_year = 2021
+### No asset ownership data in 2022
 
-#i = 2020
+n_fact = 3 # Number of PCA factors
+n_quant = 5 # Number of quantiles
+
+#i = 2021
 
 for (i in start_year:end_year) {
 
   ## filter for year 
   ass_data_tmp <- ass_data %>% filter(Visit_Year == i)
-  if(nrow(ass_data_tmp > 1 )){
+  if(nrow(ass_data_tmp) > 1 ){
     print (i)
+  }
+  else {
+    next
+  }
+  
   ### Drop any rows with NA values 
+  print(paste0("Rows before dropping NA values = ",as.character(nrow(ass_data_tmp))))
   ass_data_tmp <-  na.omit(ass_data_tmp)
+  print(paste0("Rows after dropping NA values = ",as.character(nrow(ass_data_tmp))))
+  ### Drop columns with Sum = 0 for all asset values (i.e. all 0 ) 
+  ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE)
+  ass_data_tmp <-  dplyr::filter(ass_data_tmp, ses_sum > 0 )
+  print(paste0("Rows after dropping all zero values = ",as.character(nrow(ass_data_tmp))))
+  
   ### Split data frame to asset data and identifiers
-  ass_data_tmp_head <- ass_data_tmp[c(1,2,4)]
-  ass_data_tmp_tail <- ass_data_tmp[5:(ncol(ass_data_tmp) - 1)]
-  ### Drop columns with Sum = 0 (i.e. all 0 ) 
-  ass_data_tmp_tail <-  ass_data_tmp_tail[, colSums(ass_data_tmp_tail != 0) > 0]
+  # ass_data_tmp_head <- ass_data_tmp[c(1,4)]
+  # ass_data_tmp_tail <- ass_data_tmp[5:(ncol(ass_data_tmp) - 2)]
+  
+  
+  ### Keep first 4 columns then drop columns if all values for SES variables are 0 
+  
+  ass_data_tmp_head <- ass_data_tmp[c(1,4)]
+  ass_data_tmp_tail <- ass_data_tmp[5:(ncol(ass_data_tmp) - 2)]
+  
+  ass_data_tmp_tail <- ass_data_tmp_tail[, colSums(ass_data_tmp_tail) > 0]
 
-  # Run PCA 
-  prn<-psych::principal(ass_data_tmp_tail, rotate="varimax", nfactors=n_fact,covar=T, scores=TRUE)
+  ass_data_tmp <- cbind(ass_data_tmp_head,ass_data_tmp_tail)
+  
+  
+  # Run PCA extract n_fact factors 
+  prn<-psych::principal(ass_data_tmp[5:(ncol(ass_data_tmp))], rotate="varimax", nfactors=n_fact,covar=T, scores=TRUE)
   # Calculate Wealth quantiles 1 = poorest to n = richest
-  ass_data_tmp_head$prn_score <- prn$scores[,1]
-  ass_data_tmp_head$wealth_quantile <-  schoRsch::ntiles(ass_data_tmp_head, dv = "prn_score", bins=3)
+  ass_data_tmp$prn_score <- prn$scores[,1]
+  ass_data_tmp$wealth_quantile <-  schoRsch::ntiles(ass_data_tmp, dv = "prn_score", bins=n_quant)
+  
+  ## Keep HHId, Year , prn_score , wealth_quantile
+  
+  ass_data_ses <- ass_data_tmp[,c('HHIntId','Visit_Year','prn_score','wealth_quantile')]
   
   ### Append to overall dataframe      
-  if(exists("ass_data_all")==FALSE) {
-  ass_data_all <- ass_data_tmp_head}
-    else{
-  ass_data_all <-  rbind(ass_data_all,ass_data_tmp_head)}
- i = i+ 1 
+  if(exists("ass_ses_all")==FALSE) {
+    ass_ses_all <- ass_data_ses
+  } else{ 
+    ass_ses_all <-  rbind(ass_ses_all,ass_data_ses)
+    }
+ 
+  i = i+ 1 
   }
-}  
+ 
+
+### To get values for each Household for each  year 
+### Get a df with Each HHId and each Visit Year
+
+all_HH.df <- as.data.frame(unique(ass_ses_all$HHIntId))
+## Merge with list of all years  
+years.df  <- as.data.frame(seq(from=start_year, to=end_year, by=1 ))
+HH_years.df <- cross_join(years.df,all_HH.df)
+names(HH_years.df)[1] <- "Visit_Year"
+names(HH_years.df)[2] <- "HHIntId"
+
+### Merge this with ass_ses_all
+ass_ses_full <- merge(HH_years.df,ass_ses_all,by=c('Visit_Year','HHIntId'),all.x=TRUE)
+
+### Impute missing wealth quantiles
+### Sort by HHIntId,Year
+ass_ses_full <- ass_ses_full[order(ass_ses_full$HHIntId,ass_ses_full$Visit_Year),]
+
+
+##https://stackoverflow.com/questions/60574665/impute-missing-with-interpolation-by-groups
+
+### locf - where data missing carry over last observation
+
+ass_ses_full$wealth_quant.imp <- with(ass_ses_full, ave(wealth_quantile
+                                      ,FUN=imputeTS::na_locf))
+
+
+
 
 #### Merge with Epi data 
 
 stata_data_file <- "/SurveillanceEpisodesHIV.dta"
 ACDIS_epi <- haven::read_dta(paste0(data_dir,stata_data_file))
-
-### Select Visit_Year as mid point in episode from epi file 
-### Merge on HHIntId = HouseholdId and Visit_Year = Mid_Visit_year
-
+# 
+# ### Select Visit_Year as mid point in episode from epi file 
+# ### Merge on HHIntId = HouseholdId and Visit_Year = Mid_Visit_year
+# 
 ACDIS_epi$Start_Year <- lubridate::year(ACDIS_epi$StartDate)
 ACDIS_epi$End_Year <- lubridate::year(ACDIS_epi$EndDate)
 
 ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
 
 
-ACDIS_epi_quant <- merge(ass_data_all,ACDIS_epi, by.x= (c("HHIntId","Visit_Year")),
-                                                by.y = (c("HouseholdId","Mid_Year")))
+ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full,by.x = (c("HouseholdId","Mid_Year")),
+                                                 by.y= (c("HHIntId","Visit_Year")),all.x=TRUE)
+
+## Now get data for each individual for each year 
+
+ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','wealth_quant.imp')]
+
+### Keep if Years > start_year
+
+ACDIS_Ind_SES <-  ACDIS_Ind_SES %>% dplyr::filter(Mid_Year >= start_year)
+
+all_Id.df <- as.data.frame(unique(ACDIS_Ind_SES$IIntId))
+## Merge with list of all years  
+Id_years.df <- cross_join(years.df,all_Id.df)
+names(Id_years.df)[1] <- "Visit_Year"
+names(Id_years.df)[2] <- "IIntId"
 
 
+### Merge this with ACDIS_Ind_SES
+ACDIS_Ind_SES_full <- merge(Id_years.df,ACDIS_Ind_SES,by.x=c('Visit_Year','IIntId'),
+                                                      by.y=c('Mid_Year','IIntId'),all.x=TRUE)
+
+### Impute missing wealth quantiles
+### Sort by IIntId,Year
+ACDIS_Ind_SES_full <- ACDIS_Ind_SES_full[order(ACDIS_Ind_SES_full$IIntId,ACDIS_Ind_SES_full$Visit_Year),]
+
+##https://stackoverflow.com/questions/60574665/impute-missing-with-interpolation-by-groups
+
+### locf - where data missing carry over last observation
+
+ACDIS_Ind_SES_full$wealth_quant.imp2 <- with(ACDIS_Ind_SES_full, ave(wealth_quant.imp
+                                                        ,FUN=imputeTS::na_locf))
+
+ACDIS_Ind_SES_full <- ACDIS_Ind_SES_full[c('Visit_Year','IIntId','wealth_quant.imp2')]
+names(ACDIS_Ind_SES_full)[3] <- "wealth_quantile"
 
 
-# ST_fname_SES_q <- paste0(data_dir,"/Surv_SES_Data.dta")
-# ### Saving overall data as a '.dta' file 
-# haven::write_dta(ACDIS_epi_quant,ST_fname_SES_q) 
-#print(paste0("Writing Stata file - ",ST_fname_SES_q))
 R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
 ### Saving as RDS file
-saveRDS(ACDIS_epi_quant  , file = R_fname_SES)
+saveRDS(ACDIS_Ind_SES_full  , file = R_fname_SES)
 
 
+#### Loading Education data 
+### Loading Individual level data for Education variables 
 
+stata_data_file <- '/RD07-99 ACDIS HSE-I All.dta'
+ACDIS_ind <- haven::read_dta(paste0(data_dir,stata_data_file))
 
-# ### Load ACDIS_epi_quant 
-# R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
-# ### Load  RDS file
-# ACDIS_epi_SES <- readRDS(R_fname_SES)
-### Select Required variables
-Ind_SES <-  ACDIS_epi_quant[c('IIntId','Visit_Year','wealth_quantile')]
+### Extract Visit Year , Id, Highest School level 
 
-### Create a data file with SES data for each HIV episode
-### Load HIV data and merge SES variable
-hiv <- getHIV()
-### Merge with hiv on IintId and keep all HIV episodes (Left join)
-hiv_SES <- merge(hiv,Ind_SES,by.x='IIntID',by.y='IIntId',all.x=TRUE)
-### Select nearest year for Asset status
-hiv_SES$year_diff = (hiv_SES$Year - hiv_SES$Visit_Year)
-hiv_SES$year_diff_abs  = abs(hiv_SES$Visit_Year - hiv_SES$Year)
-## Ranking by Individual Id , Year, year_diff
-hiv_SES <- hiv_SES %>%
-  group_by(IIntID,VisitDate) %>%
-  dplyr::mutate(rank = order(order(year_diff_abs,-1*year_diff, decreasing=FALSE)))
+ACDIS_edu <- ACDIS_ind[c('IIntId', 'VisitDate', 'HighestSchoolLevel','HighestTertiaryLevel')]
+ACDIS_edu$Visit_Year <- lubridate::year(ACDIS_edu$VisitDate)
 
-### test for dropped Id's
-hiv_SES_yr__Id <- unique(hiv_SES[c('IIntID','VisitDate')])
-hiv_yr_Id <- unique(hiv[c('IIntID','VisitDate')])
+### https://www.researchgate.net/publication/267391685_RACIAL_DIFFERENCES_IN_EDUCATIONAL_ATTAINMENT_IN_SOUTH_AFRICA
 
-### Keep top ranked value
-hiv_SES <- hiv_SES %>% filter(rank==1)
-### Keep version with Year and Wealth Quantile
-Vis_SES <- unique(hiv_SES[c('IIntID','VisitDate','wealth_quantile')])
-R_fname_SES <- paste0(data_dir,"/Vis_SES_Data.RDS")
-saveRDS(Vis_SES,file= R_fname_SES)
+### Recode School (Highest School Level Variable)
+### None = 1,2
+### Lower primary (Grades 1,2,3,4) = 3,4,5,6,7 
+### Higher Primary (Grades 5,6,7) = 8,9,10
+### Lower Secondary (Grades 8,9,10) = 11,12,13
+### Higher Secondary (Grades 11,12) = 14,15
 
-# ### Split dataframe into subsets based on quantile value
-# ACDIS_epi_quant_sp <- split(ACDIS_epi_quant, ACDIS_epi_quant$wealth_quantile, drop = TRUE)
-# 
-# ### In a for loop produce the individual files for each quantile
-# 
-# 
-# for (i in 1:n_fact) {
-#     print(i)
-#     ACDIS_epi_q <- ACDIS_epi_quant_sp [[i]]
-#     ST_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.dta")
-#     R_fname_SES_q <- paste0(data_dir,"/q",as.character(i),"_SES_Data.RDS")
-#     ### Saving as RDS file
-#     saveRDS(ACDIS_epi_q, file = R_fname_SES_q) 
-#     print(paste0("Writing RDS file - ",R_fname_SES_q))
-#     
-#     ### Saving as a '.dta' file 
-#     haven::write_dta(ACDIS_epi_q,ST_fname_SES_q) 
-#     print(paste0("Writing Stata file - ",ST_fname_SES_q))
-# }
+### Recode Tertiary (Highest Tertiary Level )
+### Tertiary = 16,17,18,19,20
 
+ACDIS_edu$highest_edu <- NA
 
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(1,2)] <- 0
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(3,4,5,6,7)] <- 1
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(8,9,10)] <- 2
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(11,12,13)] <- 3
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(14,15)] <- 4
+ACDIS_edu$highest_edu[ACDIS_edu$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- 5
 
+#table(ACDIS_edu$highest_edu)
 
+### What to do when highest education reported decreases over time ? 
+
+ACDIS_edu$highest_edu_fact <- as.factor(ACDIS_edu$highest_edu)
+
+### Save as RDS file 
+
+R_fname_edu <- paste0(data_dir,"/Ind_Edu_Data.RDS")
+### Saving as RDS file
+saveRDS(ACDIS_edu  , file = R_fname_edu)
+
+### Interpolate missing data ?
 
 

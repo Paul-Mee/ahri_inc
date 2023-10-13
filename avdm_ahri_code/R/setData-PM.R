@@ -34,7 +34,7 @@ setAge <- function(dat, Args) {
 getBirthDate <- function(dat = NULL, addVars=" ") {
   if (is.null(dat)) 
     dat <- getEpisodes() 
-  dat <- select(dat, IIntID, DateOfBirth=DoB, contains(addVars))
+  dat <- dplyr::select(dat, IIntID, DateOfBirth=DoB, contains(addVars))
   dat <- group_by(dat, IIntID) %>% slice(1)
   dat <- ungroup(dat)
   dat <- filter(dat, !is.na(DateOfBirth))
@@ -69,7 +69,7 @@ makeAgeVars <- function(dat, time2=NULL, age_cut=NULL, birthdate=NULL){
     dat <- data.frame(left_join(dat, birthdate, by="IIntID"))
     dat$Age <- floor(as.numeric(difftime(
       dat[,time2], dat[,"DateOfBirth"], units='weeks'))/52.25)
-    dat <- select(dat, -(DateOfBirth))
+    dat <- dplyr::select(dat, -(DateOfBirth))
   }
   if(!is.null(age_cut)) {
     dat <- mutate(dat, AgeCat = cut(Age, breaks=age_cut,

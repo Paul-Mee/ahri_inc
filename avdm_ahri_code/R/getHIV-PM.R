@@ -120,15 +120,15 @@ getRTData <- function(dat=NULL, onlyRT=TRUE) {
       is.finite(early_pos) & is.finite(late_neg), 1, 0)) 
   # I just drop these individuals, irreconcilable
   rtdat <- filter(rtdat, late_neg_after==0) %>% 
-    select(-c(late_neg_after, late_pos))
+    dplyr::select(-c(late_neg_after, late_pos))
   if (onlyRT) {
     # Drop any indiv that dont have a first neg date.
     rtdat <- filter(rtdat, !(is.na(early_neg) & is.na(late_neg)))
     # Must have two tests, if early neg date is equal to late neg date and missing pos date then drop
     rtdat <- filter(rtdat, !(early_neg==late_neg & is.na(early_pos)))
   }
-  rtdat <- mutate(rtdat, sero_event = ifelse(is.finite(early_pos), 1, 0))
-  rtdat <- rename(rtdat, obs_start = early_neg)
+  rtdat <- dplyr::mutate(rtdat, sero_event = ifelse(is.finite(early_pos), 1, 0))
+  rtdat <- dplyr::rename(rtdat, obs_start = early_neg)
   rtdat
 }
 

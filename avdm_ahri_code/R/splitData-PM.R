@@ -62,8 +62,8 @@ getYearDates <- function(Years) {
 
 splitAtSeroDate <- function(
   dat=NULL,  splitYears=NULL) {
-  dat <- rename(dat, event = .data$sero_event)
-  dat <- mutate(dat, obs_end=ifelse(.data$event==1, .data$sero_date, .data$late_neg))
+  dat <- dplyr::rename(dat, event = .data$sero_event)
+  dat <- dplyr::mutate(dat, obs_end=ifelse(.data$event==1, .data$sero_date, .data$late_neg))
   edat <- splitData2(dat, years=splitYears)
   edat <- mutate(edat, Time = as.numeric(.data$obs_end - .data$obs_start))
   if(any(edat$Time>366)) stop("Days in Year > 366")

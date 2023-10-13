@@ -10,6 +10,9 @@
 #' Args <- setArgs(imputeMethod = imputeRandomPoint)
 #' rtdat <- getRTData(dat=getHIV())
 #' getIncData(rtdat, Args = Args)
+
+
+
 getIncData <- function(rtdat, bdat = NULL, Args, func = identity) {
   if (is.null(bdat)) bdat = getBirthDate()
   dat <- Args$imputeMethod(rtdat)
