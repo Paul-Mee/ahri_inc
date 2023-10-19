@@ -1,5 +1,9 @@
 ###
-### This code takes the AHRI household data and calculates SES rankings for each calendar year
+### This code takes the AHRI household data and calculates SES rankings for households and 
+### individuals in those households for each calendar year
+### Variables with no data in a particular year are dropped prior to the PCA stage 
+### and calculation of SES rankings for that year
+### Interpolation is used to substitute for missing data 
 ### 
 
 # Clear any existing data from the data set
@@ -429,7 +433,7 @@ end_year = 2021
 ### No asset ownership data in 2022
 
 n_fact = 3 # Number of PCA factors
-n_quant = 5 # Number of quantiles
+n_quant = 3 # Number of quantiles
 
 #i = 2021
 
