@@ -81,6 +81,13 @@ ACDIS_hh  <- ACDIS_hh  %>% relocate(Visit_Year, .after=VisitDate)
 ### these definitions are subjective and could be changed based on local feedback
 ### For the next version functions could be developed to avoid repetitive lines of code
 
+### An alternative approach is to use Multiple Correspondence Analysis treat these ranked variables as binary indicators and have 
+### each coded as 1 or 0 (present or absent and then load those into the PCA analysis). 
+### This avoids subjective decisions on ranking by wealth
+### https://rpubs.com/gaston/MCA
+### This seems more specific 
+### http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/114-mca-multiple-correspondence-analysis-in-r-essentials
+
 ### Water Source 
 
 ACDIS_hh$water <- NA
