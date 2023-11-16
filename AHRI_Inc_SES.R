@@ -346,11 +346,11 @@ ggsave(paste0(data_dir,plot_fname),p3,  width=20, height=15, units="cm")
 
 ###  KM curve code 
 
-km_start_year <- 2005
+km_start_year <- 2015
 
 km_start_date <- as.Date(paste0(as.character(km_start_year),"-01-01"))
 
-km_end_year <- 2014
+km_end_year <- 2023
 
 
 ### Use first imputed data set
@@ -434,14 +434,16 @@ T_Inc <- T_Inc[!is.na(T_Inc$wealth_quantile),]
 
 T_Inc$SES <- ""
 
-T_Inc <- within(T_Inc, SES[wealth_quantile==1] <- "Wealthiest")
-T_Inc <- within(T_Inc, SES[wealth_quantile==2] <- "Medium")
-T_Inc <- within(T_Inc, SES[wealth_quantile==3] <- "Least Wealthy")
+# T_Inc <- within(T_Inc, SES[wealth_quantile==1] <- "Wealthiest")
+# T_Inc <- within(T_Inc, SES[wealth_quantile==2] <- "Medium")
+# T_Inc <- within(T_Inc, SES[wealth_quantile==3] <- "Least Wealthy")
+# 
+# T_Inc$SES <- factor(T_Inc$SES,
+#                     levels = c("Wealthiest", "Medium", "Least Wealthy"))
 
-T_Inc$SES <- factor(T_Inc$SES,
-                    levels = c("Wealthiest", "Medium", "Least Wealthy"))
+T_Inc$SES_char <- as.character(T_Inc$wealth_quantile)
 
-T_Inc$SES_char <- as.character(T_Inc$SES)
+T_Inc$SES <- as.factor(T_Inc$SES_char)
 
 #### Aggregate incidence by group 
 
@@ -479,7 +481,7 @@ p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=T_Inc)%>%
   ggsurvfit(type = "survival") +
   labs(
     x = "Days to serconversion",
-    y = "Probability of remaining HIV negative",
+    y = "Survival Probability",
     title = plot_title
   ) +
   add_confidence_interval() +

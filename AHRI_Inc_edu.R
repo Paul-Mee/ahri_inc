@@ -234,8 +234,8 @@ names(inc_plot_data )[3] <- "Incidence"
 
 
 Edu_inc_plot <- inc_plot_data %>% filter(Year <= end_year)
-Edu_inc_plot$Year <- as.integer(SES_inc_plot$Year)
-Edu_inc_plot$Edu <- as.factor(SES_inc_plot$Edu)
+Edu_inc_plot$Year <- as.integer(inc_plot_data$Year)
+Edu_inc_plot$Edu <- as.factor(inc_plot_data$Edu)
 
 # Make the plot
 
