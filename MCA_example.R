@@ -107,7 +107,7 @@ fviz_mca_var(res.mca, col.var = "cos2",
 ## The function get_mca_ind() [in factoextra] is used to extract the results for individuals. 
 ## This function returns a list containing the coordinates, the cos2 and the contributions of individuals:
   
-  ind <- get_mca_ind(res.mca)
+  ind <- factoextra::get_mca_ind(res.mca)
   
 # Coordinates of column points
   head(ind$coord)
