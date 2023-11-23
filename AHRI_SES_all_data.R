@@ -364,12 +364,66 @@ ACDIS_hh$VAC[as.integer(ACDIS_hh$VAC)== 9] <- NA
 
 ### tabulate 
 
-dat.df <- ACDIS_hh %>% 
-  group_by(Visit_Year) %>% 
-  summarise(BED = sum(BED))
+item_list <- c( "BED",
+                "BIC",
+                "BLM",
+                "CAR",
+                "CBE",
+                "CTL",
+                "ECO",
+                "EHP",
+                "EKT",
+                "FRG",
+                "GCK",
+                "HSF",
+                "KLT",
+                "KTS",
+                "MCS",
+                "OLS",
+                "PMC",
+                "RAD",
+                "SOF",
+                "SWM",
+                "TBC",
+                "TLL",
+                "TMB",
+                "TVS",
+                "VCR",
+                "WBR",
+                "HWG",
+                "WSM",
+                "EHT",
+                "PHT",
+                "SHF",
+                "CPT",
+                "VAN",
+                "LOR",
+                "TFV",
+                "FRN",
+                "JWT",
+                "ACN",
+                "DIS",
+                "MIC",
+                "PTV",
+                "SEC",
+                "SWP",
+                "TUM",
+                "VAC")
 
-year.df <-  cbind(year.df,dat.df[,2])
+tab.df <- as.data.frame(unique(ACDIS_hh$Visit_Year))
+names(tab.df)[1] <- "Visit_Year"
 
+tab.df <-  tab.df %>% arrange(Visit_Year)
+
+for (var_nam in item_list) {
+  dat.df <- ACDIS_hh %>% 
+    group_by(Visit_Year) %>% 
+    summarise(x = sum(.data[[var_nam]]))
+    names(dat.df)[2] <- var_nam
+    tab.df <- merge(tab.df,dat.df,by='Visit_Year')
+}
+
+write.csv2(tab.df,paste0(data_dir,'/asset_item.csv'))
 
 
 
@@ -416,35 +470,30 @@ asset_list <- c("HHIntId",
                 "VCR",
                 "WBR",
                 "HWG",
-                "WSM",
-                "EHT",
-                "PHT",
-                "SHF",
-                "CPT",
-                "VAN",
-                "LOR",
-                "TFV",
-                "FRN",
-                "JWT",
-                "ACN",
-                "DIS",
-                "MIC",
-                "PTV",
-                "SEC",
-                "SWP",
-                "TUM",
-                "VAC")
+                "WSM"
+                # "EHT",
+                # "PHT",
+                # "SHF",
+                # "CPT",
+                # "VAN",
+                # "LOR",
+                # "TFV",
+                # "FRN",
+                # "JWT",
+                # "ACN",
+                # "DIS",
+                # "MIC",
+                # "PTV",
+                # "SEC",
+                # "SWP",
+                # "TUM",
+                # "VAC"
+                )
 
 ### Create new dataframe with just required data 
 
 ass_data <- ACDIS_hh[,asset_list]
 
-# ### Extract year from visit date 
-# 
-ass_data$Visit_Year <- lubridate::year(ass_data$VisitDate)
-# 
-# ### Move Visit data column
-ass_data <- ass_data %>% relocate(Visit_Year, .after=VisitDate)
 
 
 ### Count number of visits per year per household
@@ -461,45 +510,28 @@ ass_data <- ass_data %>%
 ass_data <- ass_data %>% filter(rank==1)
 
 
-### Setting NA values for wall_mat_norm and roof_mat_norm to 0 
+## Select data for 2003 to 2021 and 2023
 
-# ass_data$wall_mat_norm[is.na(ass_data$wall_mat_norm)] <- 0
-# ass_data$roof_mat_norm[is.na(ass_data$roof_mat_norm)] <- 0
+ass_data <- ass_data %>% filter(Visit_Year >= 2003)
+ass_data <- ass_data %>% filter(Visit_Year != 2022)
 
-### Loop to calculate asset index for each year 
 
-start_year = 2004
-end_year = 2021
-### No asset ownership data in 2022
 
 n_fact = 3 # Number of PCA factors
 n_quant = 3 # Number of quantiles
 
-#i = 2021
 
-for (i in start_year:end_year) {
-
-  ## filter for year 
-  ass_data_tmp <- ass_data %>% filter(Visit_Year == i)
-  if(nrow(ass_data_tmp) > 1 ){
-    print (i)
-  }
-  else {
-    next
-  }
-  
   ### Drop any rows with NA values 
-  print(paste0("Rows before dropping NA values = ",as.character(nrow(ass_data_tmp))))
-  ass_data_tmp <-  na.omit(ass_data_tmp)
+  print(paste0("Rows before dropping NA values = ",as.character(nrow(ass_data))))
+  ass_data_tmp <-  na.omit(ass_data)
   print(paste0("Rows after dropping NA values = ",as.character(nrow(ass_data_tmp))))
-  ### Drop columns with Sum = 0 for all asset values (i.e. all 0 ) 
+  
+  ### Drop rows with Sum = 0 for all asset values (i.e. all 0 ) 
   ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE)
   ass_data_tmp <-  dplyr::filter(ass_data_tmp, ses_sum > 0 )
   print(paste0("Rows after dropping all zero values = ",as.character(nrow(ass_data_tmp))))
   
-  ### Split data frame to asset data and identifiers
-  # ass_data_tmp_head <- ass_data_tmp[c(1,4)]
-  # ass_data_tmp_tail <- ass_data_tmp[5:(ncol(ass_data_tmp) - 2)]
+
   
   
   ### Keep first 4 columns then drop columns if all values for SES variables are 0 
@@ -507,7 +539,11 @@ for (i in start_year:end_year) {
   ass_data_tmp_head <- ass_data_tmp[c(1,4)]
   ass_data_tmp_tail <- ass_data_tmp[5:(ncol(ass_data_tmp) - 2)]
   
+  print(paste0("Number of columns of asset data before dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp_tail))))
+  
   ass_data_tmp_tail <- ass_data_tmp_tail[, colSums(ass_data_tmp_tail) > 0]
+  
+  print(paste0("Number of columns of asset data after dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp_tail))))
 
   ass_data_tmp <- cbind(ass_data_tmp_head,ass_data_tmp_tail)
   
@@ -522,29 +558,20 @@ for (i in start_year:end_year) {
   
   ass_data_ses <- ass_data_tmp[,c('HHIntId','Visit_Year','prn_score','wealth_quantile')]
   
-  ### Append to overall dataframe      
-  if(exists("ass_ses_all")==FALSE) {
-    ass_ses_all <- ass_data_ses
-  } else{ 
-    ass_ses_all <-  rbind(ass_ses_all,ass_data_ses)
-    }
- 
-  i = i+ 1 
-  }
  
 
 ### To get values for each Household for each  year 
 ### Get a df with Each HHId and each Visit Year
 
-all_HH.df <- as.data.frame(unique(ass_ses_all$HHIntId))
+all_HH.df <- as.data.frame(unique(ass_data_ses$HHIntId))
 ## Merge with list of all years  
-years.df  <- as.data.frame(seq(from=start_year, to=end_year, by=1 ))
+years.df  <- as.data.frame(unique(ass_data_ses$Visit_Year))
 HH_years.df <- cross_join(years.df,all_HH.df)
 names(HH_years.df)[1] <- "Visit_Year"
 names(HH_years.df)[2] <- "HHIntId"
 
 ### Merge this with ass_ses_all
-ass_ses_full <- merge(HH_years.df,ass_ses_all,by=c('Visit_Year','HHIntId'),all.x=TRUE)
+ass_ses_full <- merge(HH_years.df,ass_data_ses,by=c('Visit_Year','HHIntId'),all.x=TRUE)
 
 ### Impute missing wealth quantiles
 ### Sort by HHIntId,Year
@@ -584,7 +611,7 @@ ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','wealth_quant.imp')]
 
 ### Keep if Years > start_year
 
-ACDIS_Ind_SES <-  ACDIS_Ind_SES %>% dplyr::filter(Mid_Year >= start_year)
+ACDIS_Ind_SES <-  ACDIS_Ind_SES %>% dplyr::filter(Mid_Year >= 2003)
 
 all_Id.df <- as.data.frame(unique(ACDIS_Ind_SES$IIntId))
 ## Merge with list of all years  
