@@ -88,6 +88,12 @@ ACDIS_hh  <- ACDIS_hh  %>% relocate(Visit_Year, .after=VisitDate)
 ### https://rpubs.com/gaston/MCA
 ### This seems more specific 
 ### http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/114-mca-multiple-correspondence-analysis-in-r-essentials
+####
+#### This confirms that the term coordinates used in the example above is synonymous with factor scores used in PCA
+#### https://en.wikipedia.org/wiki/Correspondence_analysis
+####
+#### This Abdi et al paper provides a nice example of the use of MCA
+#### https://personal.utdallas.edu/~herve/Abdi-MCA2007-pretty.pdf
 
 ### Water Source 
 
@@ -518,7 +524,7 @@ ass_data <- ass_data %>% filter(Visit_Year != 2022)
 
 
 n_fact = 3 # Number of PCA factors
-n_quant = 3 # Number of quantiles
+n_quant = 5 # Number of quantiles
 
 
   ### Drop any rows with NA values 
