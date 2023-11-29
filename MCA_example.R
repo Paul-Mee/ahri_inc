@@ -116,4 +116,4 @@ fviz_mca_var(res.mca, col.var = "cos2",
 # Contributions
   head(ind$contrib)  
   
-### Need to figure out how to derive asset scores from MCA   
+### coord is synonymous with the factor scores
