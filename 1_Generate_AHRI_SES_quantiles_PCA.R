@@ -528,8 +528,13 @@ for (var in asset_list){
 ### Get a df with Each HHId and each Visit Year
 
 all_HH.df <- as.data.frame(unique(ass_data_ses$HHIntId))
-## Merge with list of all years  
-years.df  <- as.data.frame(unique(ass_data_ses$Visit_Year))
+## Merge with list of all years from first to last year 
+min_year <- min(ass_data_ses$Visit_Year)
+max_year <- max(ass_data_ses$Visit_Year)
+
+years.df  = as.data.frame(seq(min_year, max_year, 1))
+names(years.df)[1] <- "Year"
+
 HH_years.df <- cross_join(years.df,all_HH.df)
 names(HH_years.df)[1] <- "Visit_Year"
 names(HH_years.df)[2] <- "HHIntId"
