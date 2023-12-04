@@ -570,6 +570,16 @@ ACDIS_epi$End_Year <- lubridate::year(ACDIS_epi$EndDate)
 
 ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
 
+### If multiple visits for an individual in the year use first one
+
+## Ranking by Individual Id , Mid_year
+ACDIS_epi <- ACDIS_epi %>%
+  group_by(IIntId,Mid_Year) %>%
+  dplyr::mutate(rank = order(order(StartDate, decreasing=FALSE)))
+
+
+### If multiple visits in a year just use first one
+ACDIS_epi <- ACDIS_epi %>% filter(rank==1)
 
 ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full,by.x = (c("HouseholdId","Mid_Year")),
                                                  by.y= (c("HHIntId","Visit_Year")),all.x=TRUE)
