@@ -171,7 +171,7 @@ print(paste0("Number of sero-conversions ",as.character(n_sero)))
 
 ### Keep required variables for KM analysis
 
-surv_dat <- surv_dat[c('IIntID','Year','sex','obs_start','obs_end','sero_event','AgeCat','SES')]
+surv_dat <- surv_dat[c('IIntID','Year','sex','obs_start','obs_end','sero_event','Age','SES')]
 
 ### Create time variable 
 
@@ -213,10 +213,35 @@ p2
 
 ### Cox Regression 
 #### Survival Analysis (https://cran.r-project.org/web/packages/survivalAnalysis/vignettes/multivariate.html)
+#### http://www.sthda.com/english/wiki/cox-proportional-hazards-model
 
-res.cox <- coxph(Surv(ntime, sero_event) ~ AgeCat + sex + SES , data =  surv_dat,id=IIntID)
 
-cox_fname <- paste0(data_dir,"/cox_",as.character(start_date),"_",as.character(end_date),".txt")
+#### Univariable analysis 
+
+
+covariates <- c("Age", "sex",  "SES")
+univ_formulas <- sapply(covariates,
+                        function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
+
+univ_models <- lapply( univ_formulas, function(x){coxph(x, data = surv_dat,id=IIntID)})
+
+cox_fname <- paste0(data_dir,"/cox_univ_",as.character(start_date),"_",as.character(end_date),".txt")
+for (i in seq(1,length(covariates),1)) {
+   res.cox <- univ_models[[i]]
+   if(i = 1){
+   sink(cox_fname,append=FALSE)
+   } else {
+   sink(cox_fname,append=TRUE)  
+   }
+   sink(file=NULL)
+   print(summary(res.cox))
+}
+
+
+#### Multivariable analysis 
+
+cox_fname <- paste0(data_dir,"/cox_multi_",as.character(start_date),"_",as.character(end_date),".txt")
+res.cox <- coxph(Surv(ntime, sero_event) ~ Age + sex + SES , data =  surv_dat,id=IIntID)
 sink(cox_fname)
 summary(res.cox)
 sink()
