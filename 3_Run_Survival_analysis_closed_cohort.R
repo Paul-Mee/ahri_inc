@@ -25,8 +25,8 @@ sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2005-01-01")
-end_date <- as.Date("2009-12-31")
+start_date <- as.Date("2018-01-01")
+end_date <- as.Date("2022-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -51,6 +51,9 @@ surv_dat <- dplyr::filter(surv_dat,((surv_dat$obs_end > start_date) &
 
 surv_dat <- within(surv_dat, obs_end[obs_end > end_date ] <- end_date)
 
+### If obs_end greater than last negative then censor at last observation 
+### check not needed ?
+
 
 
 ### Count number of individuals in cohort 
@@ -58,6 +61,12 @@ n_cohort <- dplyr::n_distinct(surv_dat$IIntID)
 
 ### Number of sero-conversions
 n_sero <- sum(surv_dat$sero_event)
+
+### list of those who sero convert 
+
+tmp <- filter(surv_dat,(surv_dat$sero_event==1))
+tmp <- tmp[c('IIntID')]
+write.csv(tmp,file=paste0(data_dir,"/id_sero_closed.csv"))
 
 
 
@@ -85,7 +94,9 @@ sum_event_ses_obs  <- surv_dat %>%
 sum_event_ses_obs$incid_100 <- 100*sum_event_ses_obs$sum_sero/sum_event_ses_obs$sum_py
 
 sum_event_ses_obs
+events_fname <- paste0(data_dir,"/events_ses_obs",as.character(start_date),"_",as.character(end_date),".csv")
 
+write.csv(sum_event_ses_obs,file = events_fname)
 
 
 ### For KM plots reduce to a single row per individual 
@@ -141,6 +152,9 @@ sum_event_ses_all$incid_100 <- 100*sum_event_ses_all$sum_sero/sum_event_ses_all$
 
 sum_event_ses_all
 
+events_fname <- paste0(data_dir,"/events_ses_",as.character(start_date),"_",as.character(end_date),".csv")
+
+write.csv(sum_event_ses_all,file = events_fname)
 
 plot_title <- paste0("Kaplan-Meier plot (failure = seroconversion) \n Cohort of individuals HIV negative on  ",start_date,
                      " - Censored on ",end_date,
@@ -160,8 +174,34 @@ p2 <-  survfit(Surv(time=time_years, event=sero_event==1) ~ SES_start, data=surv
   ) 
 p2
 
+plot_fname <- paste0(data_dir,"/km_all_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
 
-### Cox Regression for individual observations - Age - SES fixed at start of period
+
+### Time variant covariates 
+
+
+### Converting time to years 
+
+plot_title <- paste0("Kaplan-Meier plot (failure = seroconversion) \n Cohort of individuals HIV negative on  ",start_date,
+                     " - Censored on ",end_date,
+                     "\n Time varying covariates")
+
+
+p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat,id=IIntID)%>% 
+  ggsurvfit(type = "survival") +
+  labs(
+    x = "Days to serconversion",
+    y = "Survival Probability",
+    title = plot_title
+  ) 
+p2
+
+plot_fname <- paste0(data_dir,"/km_obs_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
+
+
+### Cox Regression  - Age - SES fixed at start of period
 #### Survival Analysis (https://cran.r-project.org/web/packages/survivalAnalysis/vignettes/multivariate.html)
 #### http://www.sthda.com/english/wiki/cox-proportional-hazards-model
 

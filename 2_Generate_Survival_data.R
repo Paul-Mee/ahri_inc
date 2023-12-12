@@ -127,10 +127,38 @@ R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
 Vis_SES <- readRDS(R_fname_SES)
 
 ### Merge SES data 
-sero_data_imput_ses.df  <- merge(sero_data_imput.df ,Vis_SES,by.x=c('IIntID','Year'),by.y=c('IIntId','Visit_Year'),all.x=TRUE)
+sero_data_imput_ses.df  <- merge(sero_data_imput.df ,Vis_SES,by.x=c('IIntID','Year'),by.y=c('IIntId','Mid_Year'),all.x=TRUE)
+
+# ### Count number of NA values in imputed asset data by year 
+summary_dat <- sero_data_imput_ses.df %>% group_by(Year) %>% summarise(NA_sum = sum(is.na(wealth_quant.imp1)),n_ind = n())
+# ### Percentage NA values by year 
+summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
+# 
+print(n=25,summary_dat)
+
+### Impute missing wealth quantile data for individuals with at least one recorded wealth quantile
+
+
+### locf - where data missing carry over last observation but only in cases 
+### where there is any data for the Individual
+#
+
+sero_data_imput_ses.df     <- sero_data_imput_ses.df %>% 
+                              group_by(IIntID) %>%
+                              arrange(Year) %>%
+                              mutate(wealth_quant.imp2 = if(all(is.na(wealth_quant.imp1))) NA 
+                                                       else imputeTS::na_locf(wealth_quant.imp1))
+
+
+
+ass_ses_full_imp  <- ass_ses_full %>%
+  group_by(HHIntId) %>%
+  arrange(Visit_Year) %>%
+  mutate(wealth_quant.imp1 = imputeTS::na_locf(wealth_quantile))
+
 
 ### Drop cases with no wealth quantile
-sero_data_imput_ses.df <- dplyr::filter(sero_data_imput_ses.df,!is.na(sero_data_imput_ses.df$wealth_quantile))
+#sero_data_imput_ses.df <- dplyr::filter(sero_data_imput_ses.df,!is.na(sero_data_imput_ses.df$wealth_quantile))
 
 ### Generate cohort of interest 
 ### Include all individuals HIV negative and under surveillance at the start date 

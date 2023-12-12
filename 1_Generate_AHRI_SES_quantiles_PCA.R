@@ -38,7 +38,7 @@ n_quant = 5 # Number of quantiles
 stata_data_file <- '/RD06-99 ACDIS HSE-H All.dta'
 ACDIS_hh <- haven::read_dta(paste0(data_dir,stata_data_file))
 
-
+tmp <-  dplyr::filter(ACDIS_hh, HHIntId == 44836 )
 ### Extract year from visit date 
 
 ACDIS_hh$Visit_Year <- lubridate::year(ACDIS_hh$VisitDate)
@@ -520,15 +520,15 @@ for (var in asset_list){
   
   ass_data_ses <- ass_data_tmp[,c('HHIntId','Visit_Year','prn_score','wealth_quantile')]
   
-### Interpolation for missing data 
-### Interpolate to get a vlaue for each household for each year 
-### use locf - carry forward last observation 
+### Interpolation for missing data
+### Interpolate to get a vlaue for each household for each year
+### use locf - carry forward last observation
 ### If valune missing in a particular year use most recent value
 
 ### Get a df with Each HHId and each Visit Year
 
 all_HH.df <- as.data.frame(unique(ass_data_ses$HHIntId))
-## Merge with list of all years from first to last year 
+## Merge with list of all years from first to last year
 min_year <- min(ass_data_ses$Visit_Year)
 max_year <- max(ass_data_ses$Visit_Year)
 
@@ -539,19 +539,27 @@ HH_years.df <- cross_join(years.df,all_HH.df)
 names(HH_years.df)[1] <- "Visit_Year"
 names(HH_years.df)[2] <- "HHIntId"
 
-### Merge this with ass_data_ses
+# ### Merge this with ass_data_ses
 ass_ses_full <- merge(HH_years.df,ass_data_ses,by=c('Visit_Year','HHIntId'),all.x=TRUE)
+#
 
-### Impute missing wealth quantiles
-### Sort by HHIntId,Year
-ass_ses_full <- ass_ses_full[order(ass_ses_full$HHIntId,ass_ses_full$Visit_Year),]
+# ### Count number of NA values by year
+summary_dat <- ass_ses_full %>% group_by(Visit_Year) %>% summarise(NA_sum = sum(is.na(wealth_quantile)),n_tot = n())
+# ### Percentage NA values by year
+summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_tot*100
+#
+print(n=21,summary_dat)
+#
 
-##https://stackoverflow.com/questions/60574665/impute-missing-with-interpolation-by-groups
 
+#
 ### locf - where data missing carry over last observation
+#
 
-ass_ses_full$wealth_quant.imp <- with(ass_ses_full, ave(wealth_quantile
-                                      ,FUN=imputeTS::na_locf))
+ass_ses_full_imp  <- ass_ses_full %>%
+  group_by(HHIntId) %>%
+  arrange(Visit_Year) %>%
+  mutate(wealth_quant.imp1 = imputeTS::na_locf(wealth_quantile))
 
 #### Now use the surveillance episodes dataset to get a 
 #### quantile value for each individual in each year they were
@@ -570,7 +578,6 @@ ACDIS_epi$End_Year <- lubridate::year(ACDIS_epi$EndDate)
 
 ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
 
-### If multiple visits for an individual in the year use first one
 
 ## Ranking by Individual Id , Mid_year
 ACDIS_epi <- ACDIS_epi %>%
@@ -581,44 +588,33 @@ ACDIS_epi <- ACDIS_epi %>%
 ### If multiple visits in a year just use first one
 ACDIS_epi <- ACDIS_epi %>% filter(rank==1)
 
-ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full,by.x = (c("HouseholdId","Mid_Year")),
+### Merge with asset data 
+
+ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full_imp,by.x = (c("HouseholdId","Mid_Year")),
                                                  by.y= (c("HHIntId","Visit_Year")),all.x=TRUE)
+
+# ### Count number of NA values by year 
+summary_dat <- ACDIS_epi_quant %>% group_by(Mid_Year) %>% summarise(NA_sum = sum(is.na(wealth_quantile)),n_ind = n())
+# ### Percentage NA values by year 
+summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
+# 
+print(n=25,summary_dat)
+
+
+
+ass_ses_full_imp  <- ass_ses_full %>%
+  group_by(HHIntId) %>%
+  arrange(Visit_Year) %>%
+  mutate(wealth_quant.imp1 = imputeTS::na_locf(wealth_quantile))
+
+
 
 ## Now get data for each individual for each year 
 
-ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','wealth_quant.imp')]
-
-### Keep if Years > 2003
-
-ACDIS_Ind_SES <-  ACDIS_Ind_SES %>% dplyr::filter(Mid_Year >= 2003)
-
-all_Id.df <- as.data.frame(unique(ACDIS_Ind_SES$IIntId))
-## Merge with list of all years  
-Id_years.df <- cross_join(years.df,all_Id.df)
-names(Id_years.df)[1] <- "Visit_Year"
-names(Id_years.df)[2] <- "IIntId"
-
-
-### Merge this with ACDIS_Ind_SES
-ACDIS_Ind_SES_full <- merge(Id_years.df,ACDIS_Ind_SES,by.x=c('Visit_Year','IIntId'),
-                                                      by.y=c('Mid_Year','IIntId'),all.x=TRUE)
-
-### Impute missing wealth quantiles
-### Sort by IIntId,Year
-ACDIS_Ind_SES_full <- ACDIS_Ind_SES_full[order(ACDIS_Ind_SES_full$IIntId,ACDIS_Ind_SES_full$Visit_Year),]
-
-##https://stackoverflow.com/questions/60574665/impute-missing-with-interpolation-by-groups
-
-### locf - where data missing carry over last observation
-
-ACDIS_Ind_SES_full$wealth_quant.imp2 <- with(ACDIS_Ind_SES_full, ave(wealth_quant.imp
-                                                        ,FUN=imputeTS::na_locf))
-
-ACDIS_Ind_SES_full <- ACDIS_Ind_SES_full[c('Visit_Year','IIntId','wealth_quant.imp2')]
-names(ACDIS_Ind_SES_full)[3] <- "wealth_quantile"
+ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','HouseholdId','wealth_quantile','wealth_quant.imp1')]
 
 
 R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
 ### Saving as RDS file
-saveRDS(ACDIS_Ind_SES_full  , file = R_fname_SES)
+saveRDS(ACDIS_Ind_SES , file = R_fname_SES)
 
