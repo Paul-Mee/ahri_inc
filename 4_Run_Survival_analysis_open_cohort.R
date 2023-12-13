@@ -61,15 +61,6 @@ surv_dat <- dplyr::filter(surv_dat,((surv_dat$obs_end > start_date) &
                                       surv_dat$obs_start < end_date) )
 
 
-### If obs_end greater than end date then censor at end date
-
-surv_dat <- within(surv_dat, obs_end[obs_end > end_date ] <- end_date)
-
-### If obs_end greater than last negative then censor at last observation 
-### check not needed ?
-
-
-
 ### Count number of individuals in cohort 
 n_cohort <- dplyr::n_distinct(surv_dat$IIntID)
 
@@ -85,11 +76,24 @@ write.csv(tmp,file=paste0(data_dir,"/id_sero_open.csv"))
 print(paste0("Number in starting cohort - HIV negative on ",as.character(start_date), " = ", as.character(n_cohort)))
 print(paste0("Number of sero-conversions ",as.character(n_sero)))
 
-### Keep required variables for KM analysis
 
-surv_dat <- surv_dat[c('IIntID','HouseholdId','Year','sex','obs_start','obs_end','sero_event','Age','SES')]
+### Analysis on 
+### 1) Those with complete SES data - SES_1
+### 2) those with imputed SES based on household -  SES_2
+### 3) those with imputed SES based on individual -  SES_3
+
+
+surv_dat$SES <- surv_dat$SES_1
+# surv_dat$SES <- surv_dat$SES_2
+# surv_dat$SES <- surv_dat$SES_3
 
 ### Create time variable 
+### Set end date of observation to earliest of obs_end, censor_date and end_date
+
+surv_dat    <- surv_dat %>%   
+  mutate(obs_end = min(obs_end,censor_date,end_date))
+
+### ntime length of time between start and end of observation
 
 surv_dat$ntime <- surv_dat$obs_end - surv_dat$obs_start
 
@@ -111,44 +115,7 @@ events_fname <- paste0(data_dir,"/events_ses_obs_open_",as.character(start_date)
 write.csv(sum_event_ses_obs,file = events_fname)
 
 
-### For KM plots reduce to a single row per individual 
 
-surv_dat$ntime_days <- as.integer(surv_dat$ntime)
-surv_dat$SES_int <- as.integer(surv_dat$SES)
-
-### Max sero_event
-surv_dat <- surv_dat %>%
-  group_by(IIntID) %>%
-  dplyr::mutate(max_sero = (max(sero_event)))
-
-### Sum ntime
-surv_dat <- surv_dat %>%
-  group_by(IIntID) %>%
-  dplyr::mutate(sum_ntime = (sum(ntime_days)))
-
-#### SES varies over time - use SES at start of period under observation 
-### Max SES 
-## Ranking by Individual Id , Mid_year
-surv_dat <- surv_dat %>%
-  group_by(IIntID) %>%
-  dplyr::mutate(rank = order(order(obs_start, decreasing=FALSE)))
-
-tmp_ses <- surv_dat[c('IIntID','HouseholdId','Age','sex','SES_int','rank')]
-tmp_ses <- tmp_ses %>% dplyr::filter(rank == 1)
-
-
-names(tmp_ses)[3] <- "Age_start"
-names(tmp_ses)[4] <- "sex_start"
-names(tmp_ses)[5] <- "SES_start"
-
-tmp_ses <- tmp_ses[c('IIntID','HouseholdId','Age_start','sex_start','SES_start')]
-
-surv_dat_km <- merge(surv_dat,tmp_ses,by="IIntID")
-surv_dat_km <- surv_dat_km %>% dplyr::filter(rank == 1)
-
-### Keep required variables for KM analysis
-
-surv_dat_km <- surv_dat_km[c('IIntID','HouseholdId.x','Age_start','sex_start','SES_start',  'max_sero','sum_ntime')]
 
 names(surv_dat_km)[2] <- "HouseholdId"
 names(surv_dat_km)[6] <- "sero_event"

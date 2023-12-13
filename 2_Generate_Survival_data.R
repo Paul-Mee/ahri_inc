@@ -148,17 +148,53 @@ sero_data_imput_ses.df     <- sero_data_imput_ses.df %>%
                               arrange(Year) %>%
                               mutate(wealth_quant.imp2 = if(all(is.na(wealth_quant.imp1))) NA 
                                                        else imputeTS::na_locf(wealth_quant.imp1))
+sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)
+
+### Count number of individuals with missing data for wealth_quant.imp2 
+
+tmp_miss_ses  <-    sero_data_imput_ses.df %>%
+                    filter(is.na(wealth_quant.imp2)) 
+
+n_miss_ses <- NROW(unique(tmp_miss_ses[c('IIntID')]))
+
+n_all_ind <- NROW(unique(sero_data_imput_ses.df[c('IIntID')]))
+
+percent_miss <- n_miss_ses/n_all_ind*100
+
+print(paste0("Individuals with no imputed SES - n/N(%) = ",
+             as.character(n_miss_ses),
+             "/",
+             as.character(n_all_ind),
+             "(",
+             as.character(percent_miss),
+             ")"))
 
 
+## Total individuals 
+tmp_miss_ses <- unique(sero_data_imput_ses.df[c('IIntID')])
 
-ass_ses_full_imp  <- ass_ses_full %>%
-  group_by(HHIntId) %>%
-  arrange(Visit_Year) %>%
-  mutate(wealth_quant.imp1 = imputeTS::na_locf(wealth_quantile))
+### If no recorded Household ID in a particular year place individual in the last recorded household
+
+sero_data_imput_ses.df     <- sero_data_imput_ses.df %>% 
+  group_by(IIntID) %>%
+  arrange(Year) %>%
+  mutate(HouseholdId_imp = if(all(is.na(HouseholdId))) NA 
+         else imputeTS::na_locf(HouseholdId))
+sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)
+
+### Generate categorical age group variable
+### age_cat 15-25,25-40,40-65, >65
+        
+sero_data_imput_ses.df$age_cat <-  ifelse((sero_data_imput_ses.df$Age >= 15 & sero_data_imput_ses.df$Age < 25), "15-24",
+                                   ifelse((sero_data_imput_ses.df$Age >= 25 & sero_data_imput_ses.df$Age < 40), "25-39",
+                                   ifelse((sero_data_imput_ses.df$Age >= 40 & sero_data_imput_ses.df$Age < 65), "40-64",
+                                   ifelse((sero_data_imput_ses.df$Age >= 65 ), ">65",F))))
 
 
-### Drop cases with no wealth quantile
-#sero_data_imput_ses.df <- dplyr::filter(sero_data_imput_ses.df,!is.na(sero_data_imput_ses.df$wealth_quantile))
+ 
+
+sero_data_imput_ses.df$age_cat  <- factor(sero_data_imput_ses.df$age_cat , levels = c("15-24", "25-39" , "40-64",   ">65"),
+              labels = c("15-24", "25-39" , "40-64",   ">65"))
 
 ### Generate cohort of interest 
 ### Include all individuals HIV negative and under surveillance at the start date 
@@ -166,9 +202,14 @@ ass_ses_full_imp  <- ass_ses_full %>%
 
 ### SES as a factor with  labels 
 
-sero_data_imput_ses.df$SES_char <- as.character(sero_data_imput_ses.df$wealth_quantile)
+sero_data_imput_ses.df$SES_1_char <- as.character(sero_data_imput_ses.df$wealth_quantile)
+sero_data_imput_ses.df$SES_1 <- as.factor(sero_data_imput_ses.df$SES_1_char)
 
-sero_data_imput_ses.df$SES <- as.factor(sero_data_imput_ses.df$SES_char)
+sero_data_imput_ses.df$SES_2_char <- as.character(sero_data_imput_ses.df$wealth_quant.imp1)
+sero_data_imput_ses.df$SES_2 <- as.factor(sero_data_imput_ses.df$SES_2_char)
+
+sero_data_imput_ses.df$SES_3_char <- as.character(sero_data_imput_ses.df$wealth_quant.imp2)
+sero_data_imput_ses.df$SES_3 <- as.factor(sero_data_imput_ses.df$SES_3_char)
 
 ### Sex as a factor 
 sero_data_imput_ses.df$sex <- as.factor(sero_data_imput_ses.df$Female)
