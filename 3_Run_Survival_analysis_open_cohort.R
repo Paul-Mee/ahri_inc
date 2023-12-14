@@ -25,8 +25,8 @@ sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2018-01-01")
-end_date <- as.Date("2022-12-31")
+start_date <- as.Date("2012-01-01")
+end_date <- as.Date("2016-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -77,21 +77,34 @@ print(paste0("Number in starting cohort - HIV negative on ",as.character(start_d
 print(paste0("Number of sero-conversions ",as.character(n_sero)))
 
 
-### Analysis on 
-### 1) Those with complete SES data - SES_1
-### 2) those with imputed SES based on household -  SES_2
-### 3) those with imputed SES based on individual -  SES_3
+#surv_dat$SES <- surv_dat$SES_1 # 1) Those with complete SES data - SES_1
+#surv_dat$SES <- surv_dat$SES_2 # 2) those with imputed SES based on household -  SES_2
+surv_dat$SES <- surv_dat$SES_3 # 3) those with imputed SES based on individual -  SES_3
+
+#### Missing data analysis 
+#### Generate a table of missing data by episode for age and sex
+
+surv_dat$included = 1 
+surv_dat$included[is.na(surv_dat$SES)] <-0
+
+table(surv_dat$age_cat,surv_dat$included)
+prop.table(table(surv_dat$age_cat,surv_dat$included),1)
+chisq.test(table(surv_dat$age_cat,surv_dat$included),correct=FALSE)
+
+#### Missing data analysis 
+#### Generate a table of missing data by episode for age and sex
 
 
-surv_dat$SES <- surv_dat$SES_1
-# surv_dat$SES <- surv_dat$SES_2
-# surv_dat$SES <- surv_dat$SES_3
+table(surv_dat$sex,surv_dat$included)
+prop.table(table(surv_dat$sex,surv_dat$included),1)
+chisq.test(table(surv_dat$sex,surv_dat$included),correct=FALSE)
 
 ### Create time variable 
-### Set end date of observation to earliest of obs_end, censor_date and end_date
+### Set end date of observation to censor date if censor date is between the start and end of the observation
+surv_dat$obs_end[ (surv_dat$obs_start < surv_dat$censor_date)   & (surv_dat$obs_end > surv_dat$censor_date)] <- surv_dat$censor_date
 
-surv_dat    <- surv_dat %>%   
-  mutate(obs_end = min(obs_end,censor_date,end_date))
+### Set end date of observation to end date if end date is between the start and end of the observation
+surv_dat$obs_end[ (surv_dat$obs_start < end_date)   & (surv_dat$obs_end > end_date)] <- end_date
 
 ### ntime length of time between start and end of observation
 
@@ -114,62 +127,26 @@ events_fname <- paste0(data_dir,"/events_ses_obs_open_",as.character(start_date)
 
 write.csv(sum_event_ses_obs,file = events_fname)
 
+### Keep required variables for analysis
+
+surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId_imp','Year','sex','age_cat','SES','obs_start','obs_end','ntime','sero_event')]
 
 
 
-names(surv_dat_km)[2] <- "HouseholdId"
-names(surv_dat_km)[6] <- "sero_event"
-names(surv_dat_km)[7] <- "ntime"
+names(surv_dat_anal)[2] <- "HouseholdId"
 
-surv_dat_km$SES_start <- as.factor(surv_dat_km$SES_start)
 
 ### Sero Events by starting SES group 
 
-sum_event_ses_all  <- surv_dat_km %>% 
-  group_by(SES_start) %>%                            
-  summarise( sum_sero = sum(sero_event),sum_py = sum(as.integer(ntime)/365.25 )) 
 
-sum_event_ses_all$incid_100 <- 100*sum_event_ses_all$sum_sero/sum_event_ses_all$sum_py
-
-sum_event_ses_all
-
-events_fname <- paste0(data_dir,"/events_ses_open_",as.character(start_date),"_",as.character(end_date),".csv")
-
-write.csv(sum_event_ses_all,file = events_fname)
 
 plot_title <- paste0("Kaplan-Meier plot (failure = seroconversion) \n Open cohort from  ",start_date,
                      " - Censored on ",end_date,
                      "\n SES at start of period")
 
-### Converting time to years 
-
-surv_dat_km$time_years = surv_dat_km$ntime/365.25
 
 
-p2 <-  survfit(Surv(time=time_years, event=sero_event==1) ~ SES_start, data=surv_dat_km,id=IIntID)%>% 
-  ggsurvfit(type = "survival") +
-  labs(
-    x = "Years to serconversion",
-    y = "Survival Probability",
-    title = plot_title
-  ) 
-p2
-
-plot_fname <- paste0(data_dir,"/km_all_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
-
-
-### Time variant covariates 
-
-
-### Converting time to years 
-
-plot_title <- paste0("Kaplan-Meier plot (failure = seroconversion) \n open cohort starting on ",start_date,
-                     " - Censored on ",end_date,
-                     "\n Time varying covariates")
-
-
-p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat,id=IIntID)%>% 
+p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat_anal,id=IIntID,cluster=HouseholdId)%>% 
   ggsurvfit(type = "survival") +
   labs(
     x = "Days to serconversion",
@@ -178,8 +155,9 @@ p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat,id=IIn
   ) 
 p2
 
-plot_fname <- paste0(data_dir,"/km_obs_open_",as.character(start_date),"_",as.character(end_date),".png")
+plot_fname <- paste0(data_dir,"/km_all_open_",as.character(start_date),"_",as.character(end_date),".png")
 ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
+
 
 
 ### Cox Regression  - Age - SES fixed at start of period
@@ -190,13 +168,13 @@ ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
 #### Univariable analysis 
 
 
-covariates <- c("Age_start", "sex_start",  "SES_start")
+covariates <- c("age_cat", "sex",  "SES")
 univ_formulas <- sapply(covariates,
                         function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
 
-univ_models <- lapply( univ_formulas, function(x){coxph(x, data = surv_dat_km,id=IIntID)})
+univ_models <- lapply( univ_formulas, function(x){coxph(x, data = surv_dat_anal,id=IIntID,cluster=HouseholdId)})
 
-cox_fname <- paste0(data_dir,"/cox_univ_all_",as.character(start_date),"_",as.character(end_date),".txt")
+cox_fname <- paste0(data_dir,"/cox_univ_open_",as.character(start_date),"_",as.character(end_date),".txt")
 for (i in seq(1,length(covariates),1)) {
   res.cox <- univ_models[[i]]
   if(i == 1){
@@ -213,50 +191,8 @@ for (i in seq(1,length(covariates),1)) {
 
 #### Multivariable analysis 
 
-cox_fname <- paste0(data_dir,"/cox_multi_all_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~ Age_start + sex_start + SES_start , data =  surv_dat_km,id=IIntID)
-sink(cox_fname,append=FALSE)
-summary(res.cox)
-sink(file=NULL)
-summary(res.cox)
-
-
-
-
-
-### Cox Regression for individual observations - Age - SES as time varying covariates
-#### Survival Analysis (https://cran.r-project.org/web/packages/survivalAnalysis/vignettes/multivariate.html)
-#### http://www.sthda.com/english/wiki/cox-proportional-hazards-model
-
-
-#### Univariable analysis 
-
-
-covariates <- c("Age", "sex",  "SES")
-univ_formulas <- sapply(covariates,
-                        function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
-
-univ_models <- lapply( univ_formulas, function(x){coxph(x, data = surv_dat,id=IIntID)})
-
-cox_fname <- paste0(data_dir,"/cox_univ_",as.character(start_date),"_",as.character(end_date),".txt")
-for (i in seq(1,length(covariates),1)) {
-  res.cox <- univ_models[[i]]
-  if(i == 1){
-    sink(cox_fname,append=FALSE)
-    print(summary(res.cox))
-  } else {
-    sink(cox_fname,append=TRUE)  
-    print(summary(res.cox))
-  }
-  sink(file=NULL)
-  print(summary(res.cox))
-}
-
-
-#### Multivariable analysis 
-
-cox_fname <- paste0(data_dir,"/cox_multi_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~ Age + sex + SES , data =  surv_dat,id=IIntID)
+cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
+res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES , data =  surv_dat_anal,cluster=HouseholdId)
 sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
