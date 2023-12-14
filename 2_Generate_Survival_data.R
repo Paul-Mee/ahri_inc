@@ -96,6 +96,7 @@ hiv <- setHIV(Args)
 rtdat <- getRTData(hiv)
 mdat <- MIdata(rtdat, Args)
 
+
 sero_data_imput.df <- mdat[[1]]
 
 ### Earliest start date
@@ -113,7 +114,7 @@ sero_data_imput.df <- sero_data_imput.df %>%
   group_by(IIntID) %>%
   dplyr::mutate(final_sero_status = (max(sero_event)))
 
-# right censored the data at the latest HIV-negative date (if uninfected) or at the imputed date (if infected)
+# right censored the data at the latest HIV-negative date (if uninfected) or at the imputed seroconversion  date (if infected)
 
 sero_data_imput.df$censor_date <- NA
 
@@ -121,6 +122,8 @@ sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status ==
                         ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
 
 sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_date), origin = "1970-01-01" )
+
+
 
 ### Read saved RDS file with SES quantiles
 R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
