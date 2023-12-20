@@ -19,14 +19,14 @@ pacman::p_load(char=package_names)
 data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
 
 
-### Read saved RDS file with SES quantiles
+### Read saved RDS file with SES quantiles and education 
 R_fname_survdat <- paste0(data_dir,"/Survdata.RDS")
 sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2012-01-01")
-end_date <- as.Date("2016-12-31")
+start_date <- as.Date("2018-01-01")
+end_date <- as.Date("2022-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -129,7 +129,7 @@ write.csv(sum_event_ses_obs,file = events_fname)
 
 ### Keep required variables for analysis
 
-surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId_imp','Year','sex','age_cat','SES','obs_start','obs_end','ntime','sero_event')]
+surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId_imp','Year','sex','age_cat','SES','highest_edu_fact','obs_start','obs_end','ntime','sero_event')]
 
 
 
@@ -168,7 +168,7 @@ ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
 #### Univariable analysis 
 
 
-covariates <- c("age_cat", "sex",  "SES")
+covariates <- c("age_cat", "sex",  "SES", "highest_edu_fact")
 univ_formulas <- sapply(covariates,
                         function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
 
@@ -192,7 +192,7 @@ for (i in seq(1,length(covariates),1)) {
 #### Multivariable analysis 
 
 cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES , data =  surv_dat_anal,cluster=HouseholdId)
+res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + highest_edu_fact, data =  surv_dat_anal,cluster=HouseholdId)
 sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
