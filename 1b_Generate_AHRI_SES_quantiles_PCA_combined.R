@@ -600,21 +600,75 @@ summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
 # 
 print(n=25,summary_dat)
 
+### Imputation for Individuals where there are any imputed wealth quantile variables available
 
+ACDIS_epi_quant_imp  <- ACDIS_epi_quant %>%
+  group_by(IIntId) %>%
+  arrange(Mid_Year) %>%
+  mutate(allNA = all(is.na(wealth_quant.imp1)),
+         wealth_quant.imp2 = if(!allNA[1]) imputeTS::na_locf(wealth_quant.imp1) else wealth_quant.imp1)
 
-ass_ses_full_imp  <- ass_ses_full %>%
-  group_by(HHIntId) %>%
-  arrange(Visit_Year) %>%
-  mutate(wealth_quant.imp1 = imputeTS::na_locf(wealth_quantile))
+ACDIS_epi_quant_imp <- ungroup(ACDIS_epi_quant_imp)
+
+### NB this doesn't take account of moves between households of differing SES
 
 
 
 ## Now get data for each individual for each year 
 
-ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','HouseholdId','wealth_quantile','wealth_quant.imp1')]
+ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
 
 
-R_fname_SES <- paste0(data_dir,"/Surv_SES_Data.RDS")
+
+
+#### Loading Education data 
+### Loading Individual level data for Education variables 
+
+stata_data_file <- '/RD07-99 ACDIS HSE-I All.dta'
+ACDIS_ind <- haven::read_dta(paste0(data_dir,stata_data_file))
+
+### Extract Visit Year , Id, Highest School level 
+
+ACDIS_edu <- ACDIS_ind[c('IIntId', 'VisitDate', 'HighestSchoolLevel','HighestTertiaryLevel')]
+ACDIS_edu$Visit_Year <- lubridate::year(ACDIS_edu$VisitDate)
+
+### https://www.researchgate.net/publication/267391685_RACIAL_DIFFERENCES_IN_EDUCATIONAL_ATTAINMENT_IN_SOUTH_AFRICA
+
+### Recode School (Highest School Level Variable)
+### None = 1,2
+### Lower primary (Grades 1,2,3,4) = 3,4,5,6,7 
+### Higher Primary (Grades 5,6,7) = 8,9,10
+### Lower Secondary (Grades 8,9,10) = 11,12,13
+### Higher Secondary (Grades 11,12) = 14,15
+
+### Recode Tertiary (Highest Tertiary Level )
+### Tertiary = 16,17,18,19,20
+
+ACDIS_edu$highest_edu <- NA
+
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(1,2)] <- "None"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(3,4,5,6,7)] <- "LP"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(8,9,10)] <- "HP"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(11,12,13)] <- "LS"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(14,15)] <- "HS"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- "Tert"
+
+#table(ACDIS_edu$highest_edu)
+
+### What to do when highest education reported decreases over time ? 
+
+ACDIS_edu$highest_edu_fact <- factor(ACDIS_edu$highest_edu,
+                                     levels = c("None","LP","HP","LS","HS","Tert"))
+
+
+#Merge with SES data
+ACDIS_edu <- ACDIS_edu[c('IIntId', 'Visit_Year', 'highest_edu_fact')]
+
+ACDIS_Ind_SES_edu <- merge(ACDIS_Ind_SES,ACDIS_edu,by.x = c('IIntId','Mid_Year'),by.y = c('IIntId','Visit_Year'),all.x = TRUE)
+
+### Save as RDS file 
+
+R_fname_edu <- paste0(data_dir,"/Ind_Edu_SES_combined.RDS")
 ### Saving as RDS file
-saveRDS(ACDIS_Ind_SES , file = R_fname_SES)
+saveRDS(ACDIS_Ind_SES_edu  , file = R_fname_edu)
 

@@ -630,7 +630,7 @@ ACDIS_epi_quant_imp  <- ACDIS_epi_quant %>%
 
 ACDIS_epi_quant_imp <- ungroup(ACDIS_epi_quant_imp)
 
-### NB this doesn't take account of moves between households of differring SES
+### NB this doesn't take account of moves between households of differing SES
 
 
 ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
