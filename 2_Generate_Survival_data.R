@@ -114,6 +114,8 @@ sero_data_imput.df <- sero_data_imput.df %>%
   group_by(IIntID) %>%
   dplyr::mutate(final_sero_status = (max(sero_event)))
 
+sero_data_imput_ses.df <- ungroup(sero_data_imput.df)
+
 # right censored the data at the latest HIV-negative date (if uninfected) or at the imputed seroconversion  date (if infected)
 
 sero_data_imput.df$censor_date <- NA
@@ -127,6 +129,7 @@ sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_d
 
 ### Read saved RDS file with SES quantiles
 R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_year.RDS") ### SES quantiles calculated within each year 
+#R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_combined.RDS") ### SES quantiles calculated across all years
 Vis_SES <- readRDS(R_fname_SES_edu)
 
 ### Merge SES data 
@@ -138,7 +141,6 @@ summary_dat <- sero_data_imput_ses.df %>% group_by(Year) %>% summarise(NA_sum = 
 summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
 # 
 print(n=25,summary_dat)
-
 
 
 ### Count number of individuals with missing data for wealth_quant.imp2 
@@ -191,7 +193,7 @@ sero_data_imput_ses.df$age_cat  <- factor(sero_data_imput_ses.df$age_cat , level
 ### Include all individuals HIV negative and under surveillance at the start date 
 ### Follow until sero-conversion , last known HIV negative test or loss to follow-up 
 
-### SES as a factor with  labels 
+### SES as a factor
 
 sero_data_imput_ses.df$SES_1_char <- as.character(sero_data_imput_ses.df$wealth_quantile)
 sero_data_imput_ses.df$SES_1 <- as.factor(sero_data_imput_ses.df$SES_1_char)

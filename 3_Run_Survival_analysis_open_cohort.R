@@ -77,9 +77,18 @@ print(paste0("Number in starting cohort - HIV negative on ",as.character(start_d
 print(paste0("Number of sero-conversions ",as.character(n_sero)))
 
 
-#surv_dat$SES <- surv_dat$SES_1 # 1) Those with complete SES data - SES_1
-#surv_dat$SES <- surv_dat$SES_2 # 2) those with imputed SES based on household -  SES_2
-surv_dat$SES <- surv_dat$SES_3 # 3) those with imputed SES based on individual -  SES_3
+#### Selecting whether to use imputed data for wealth quantile and household
+
+surv_dat$SES <- surv_dat$wealth_quantile # 1) Those with complete SES data 
+#surv_dat$SES <- surv_dat$wealth_quant.imp1 # 2) those with imputed SES based on household 
+#surv_dat$SES <- surv_dat$wealth_quant.imp2 # 3) those with imputed SES based on household and individual 
+
+### SES as a factor
+surv_dat$SES <- factor(surv_dat$SES,
+                        levels = c("1","2","3","4","5"))
+
+## If using imputed Household ID's 
+#surv_dat$HouseholdId <- surv_dat$HouseholdId_imp
 
 #### Missing data analysis 
 #### Generate a table of missing data by episode for age and sex
@@ -129,11 +138,8 @@ write.csv(sum_event_ses_obs,file = events_fname)
 
 ### Keep required variables for analysis
 
-surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId_imp','Year','sex','age_cat','SES','highest_edu_fact','obs_start','obs_end','ntime','sero_event')]
+surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId','Year','sex','age_cat','SES','highest_edu_fact','obs_start','obs_end','ntime','sero_event')]
 
-
-
-names(surv_dat_anal)[2] <- "HouseholdId"
 
 
 ### Sero Events by starting SES group 
@@ -197,5 +203,14 @@ sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
 summary(res.cox)
+
+
+#### Testing the proportional Hazards assumption 
+### http://www.sthda.com/english/wiki/cox-model-assumptions
+### "From the output above, the test is not statistically significant for each of the covariates, 
+### and the global test is also not statistically significant. Therefore, we can assume the proportional hazards."
+
+test.ph <- survival::cox.zph(res.cox)
+test.ph
 
 
