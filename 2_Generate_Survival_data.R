@@ -205,7 +205,8 @@ sero_data_imput_ses.df$SES_3_char <- as.character(sero_data_imput_ses.df$wealth_
 sero_data_imput_ses.df$SES_3 <- as.factor(sero_data_imput_ses.df$SES_3_char)
 
 ### Sex as a factor 
-sero_data_imput_ses.df$sex <- as.factor(sero_data_imput_ses.df$Female)
+sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(0, 1),
+                                        labels = c("Male", "Female"))
 
 
 R_fname_survdat <- paste0(data_dir,"/Survdata.RDS")

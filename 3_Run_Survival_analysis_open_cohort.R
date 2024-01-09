@@ -7,7 +7,7 @@ rm(list = ls())
 # Define vector of package names
 
 package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','survival',
-                   'ggsurvfit','survivalAnalysis','NCmisc','devtools')
+                   'ggsurvfit','survivalAnalysis','NCmisc','devtools','finalfit')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -187,15 +187,17 @@ for (i in seq(1,length(covariates),1)) {
     sink(cox_fname,append=FALSE)
     print(summary(res.cox))
   } else {
-    sink(cox_fname,append=TRUE)  
+    sink(cox_fname,append=TRUE)
     print(summary(res.cox))
   }
   sink(file=NULL)
   print(summary(res.cox))
 }
 
+### tabulating results
+### https://argoshare.is.ed.ac.uk/healthyr_book/cox-proportional-hazards-regression.html
 
-#### Multivariable analysis 
+#### Multivariable analysis
 
 cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
 res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + highest_edu_fact, data =  surv_dat_anal,cluster=HouseholdId)
@@ -214,3 +216,22 @@ test.ph <- survival::cox.zph(res.cox)
 test.ph
 
 
+### tabulating results 
+### https://argoshare.is.ed.ac.uk/healthyr_book/cox-proportional-hazards-regression.html
+### https://finalfit.org/articles/finalfit.html
+
+#### Summary analysis using finalfit
+
+covariates <- c(  "SES", "highest_edu_fact","age_cat", "sex")
+dependent <- "Surv(time=ntime, event=sero_event==1)"
+
+surv_dat_anal %>%
+  finalfit::finalfit(dependent=dependent ,explanatory = covariates,add_dependent_label = FALSE) -> t1 
+  # rename("Overall survival" = label) %>% 
+  # rename(" " = levels) %>% 
+  # rename("  " = all) -> t1
+knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+
+### Use r markdown to get nicely formatted tables in Word
+
+### https://argoshare.is.ed.ac.uk/healthyr_book/ms-word-via-knitrr-markdown.html

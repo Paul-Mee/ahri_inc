@@ -647,18 +647,19 @@ ACDIS_edu$Visit_Year <- lubridate::year(ACDIS_edu$VisitDate)
 ACDIS_edu$highest_edu <- NA
 
 ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(1,2)] <- "None"
-ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(3,4,5,6,7)] <- "LP"
-ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(8,9,10)] <- "HP"
-ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(11,12,13)] <- "LS"
-ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(14,15)] <- "HS"
-ACDIS_edu$highest_edu[ACDIS_edu$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- "Tert"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(3,4,5,6,7)] <- "Lower Primary"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(8,9,10)] <- "Higher Primary"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(11,12,13)] <- "Lower Secondary"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestSchoolLevel %in% c(14,15)] <- "Higher Secondary"
+ACDIS_edu$highest_edu[ACDIS_edu$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- "Tertiary"
 
 #table(ACDIS_edu$highest_edu)
 
 ### What to do when highest education reported decreases over time ? 
 
 ACDIS_edu$highest_edu_fact <- factor(ACDIS_edu$highest_edu,
-                                     levels = c("None","LP","HP","LS","HS","Tert"))
+                                     levels = c("None","Lower Primary","Higher Primary",
+                                                "Lower Secondary","Higher Secondary","Tertiary"))
 
 
 #Merge with SES data
