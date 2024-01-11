@@ -608,6 +608,8 @@ ACDIS_epi <- ACDIS_epi %>%
 ### If multiple visits in a year just use first one
 ACDIS_epi <- ACDIS_epi %>% filter(rank==1)
 
+## NB this includes years in which no household asset data was collected - hence NA values below are not really missing data 
+
 ### Merge with asset data 
 
 ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full_imp,by.x = (c("HouseholdId","Mid_Year")),
@@ -684,8 +686,69 @@ ACDIS_edu <- ACDIS_edu[c('IIntId', 'Visit_Year', 'highest_edu_fact')]
 
 ACDIS_Ind_SES_edu <- merge(ACDIS_Ind_SES,ACDIS_edu,by.x = c('IIntId','Mid_Year'),by.y = c('IIntId','Visit_Year'),all.x = TRUE)
 
+# Loading Bonded Structure Data
+
+bsi_fname="/RD01-03 ACDIS BoundedStructures.dta"
+ACDIS_bsi<- haven::read_dta(paste0(data_dir,bsi_fname))
+
+### Keep required variables 
+### ddi-documentation-english-1088.pdf 
+## ISURBANORRURAL
+# 1 Default 
+# 2 Peri-Urban 
+# 3 Rural 
+# 4 Urban 
+# 99 Unknown 
+
+## PIPSA
+# 1 Southern PIPSA 
+# 2 Northern PIPSA 
+
+## KMTONEARESTCLINIC
+
+ACDIS_bsi_tmp <- ACDIS_bsi[c('BSIntId','IsUrbanOrRural','PIPSA','KmToNearestClinic')]
+
+ACDIS_bsi_tmp$urban_rural  <- NA
+
+ACDIS_bsi_tmp$urban_rural[ACDIS_bsi_tmp$IsUrbanOrRural %in% c(2)] <- "Peri-Urban"
+ACDIS_bsi_tmp$urban_rural[ACDIS_bsi_tmp$IsUrbanOrRural %in% c(3)] <- "Rural"
+ACDIS_bsi_tmp$urban_rural[ACDIS_bsi_tmp$IsUrbanOrRural %in% c(4)] <- "Urban"
+
+ACDIS_bsi_tmp$urban_rural_fact <- factor(ACDIS_bsi_tmp$urban_rural,
+                                         levels = c("Rural","Urban","Peri-Urban"))
+
+ACDIS_bsi_tmp$pipsa  <- NA
+ACDIS_bsi_tmp$pipsa[ACDIS_bsi_tmp$PIPSA %in% c(1)] <- "Southern"
+ACDIS_bsi_tmp$pipsa[ACDIS_bsi_tmp$PIPSA %in% c(2)] <- "Northern"
+
+ACDIS_bsi_tmp$pipsa_fact <- factor(ACDIS_bsi_tmp$pipsa,
+                                   levels = c("Southern","Northern"))
+
+ACDIS_bsi_tmp$km_clinic_cat <- NA
+ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic >= 0 & ACDIS_bsi_tmp$KmToNearestClinic <= 2 )] <- "0-2"
+ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 2 & ACDIS_bsi_tmp$KmToNearestClinic <= 4 )] <- ">2-4"
+ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 4 & ACDIS_bsi_tmp$KmToNearestClinic <= 6 )] <- ">4-6"
+ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 6 )] <- ">6"
+
+ACDIS_bsi_tmp$km_clinic_fact <- factor(ACDIS_bsi_tmp$km_clinic_cat,
+                                       levels = c("0-2",">2 -4",">4-6",">6"))
+
+ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','urban_rural_fact','pipsa_fact','km_clinic_fact')]
+
+### Getting mapping between HHId and BSId
+
+HH_BS <- unique(ACDIS_hh[c('HHIntId','BSIntId')])
+
+### Merge HH_BS with ACDIS_Ind_SES_edu
+ACDIS_Ind_SES_edu_BS <- merge(ACDIS_Ind_SES_edu,HH_BS,by.x=c('HouseholdId'),  by.y = c('HHIntId') )
+
+### Merge with ACDIS_bsi_tmp2
+
+ACDIS_Ind_SES_edu_BS_full <- merge(ACDIS_Ind_SES_edu_BS,ACDIS_bsi_tmp2,by=c('BSIntId') )
+
+
 ### Save as RDS file 
 
-R_fname_edu <- paste0(data_dir,"/Ind_Edu_SES_year.RDS")
+R_fname_edu_bs <- paste0(data_dir,"/Ind_Edu_SES_BS_year.RDS")
 ### Saving as RDS file
-saveRDS(ACDIS_Ind_SES_edu  , file = R_fname_edu)
+saveRDS(ACDIS_Ind_SES_edu_BS_full  , file = R_fname_edu_bs)

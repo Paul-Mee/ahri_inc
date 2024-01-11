@@ -138,7 +138,8 @@ write.csv(sum_event_ses_obs,file = events_fname)
 
 ### Keep required variables for analysis
 
-surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId','Year','sex','age_cat','SES','highest_edu_fact','obs_start','obs_end','ntime','sero_event')]
+surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId','Year','sex','age_cat','SES','highest_edu_fact',
+                             'urban_rural_fact','pipsa_fact','km_clinic_fact','obs_start','obs_end','ntime','sero_event')]
 
 
 
@@ -174,7 +175,7 @@ ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
 #### Univariable analysis 
 
 
-covariates <- c("age_cat", "sex",  "SES", "highest_edu_fact")
+covariates <- c('age_cat', 'sex',  'SES', 'highest_edu_fact','urban_rural_fact','pipsa_fact')
 univ_formulas <- sapply(covariates,
                         function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
 
@@ -222,7 +223,7 @@ test.ph
 
 #### Summary analysis using finalfit
 
-covariates <- c(  "SES", "highest_edu_fact","age_cat", "sex")
+covariates <- c('age_cat', 'sex',  'SES', 'highest_edu_fact','urban_rural_fact')
 dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 surv_dat_anal %>%
