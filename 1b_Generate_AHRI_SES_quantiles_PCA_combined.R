@@ -615,7 +615,7 @@ ACDIS_epi_quant_imp <- ungroup(ACDIS_epi_quant_imp)
 
 ## Now get data for each individual for each year 
 
-ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
+ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','prn_score','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
 
 
 
@@ -687,7 +687,7 @@ ACDIS_bsi<- haven::read_dta(paste0(data_dir,bsi_fname))
 
 ## KMTONEARESTCLINIC
 
-ACDIS_bsi_tmp <- ACDIS_bsi[c('BSIntId','IsUrbanOrRural','PIPSA','KmToNearestClinic')]
+ACDIS_bsi_tmp <- ACDIS_bsi[c('BSIntId','Isigodi','IsUrbanOrRural','PIPSA','KmToNearestClinic')]
 
 ACDIS_bsi_tmp$urban_rural  <- NA
 
@@ -696,14 +696,14 @@ ACDIS_bsi_tmp$urban_rural[ACDIS_bsi_tmp$IsUrbanOrRural %in% c(3)] <- "Rural"
 ACDIS_bsi_tmp$urban_rural[ACDIS_bsi_tmp$IsUrbanOrRural %in% c(4)] <- "Urban"
 
 ACDIS_bsi_tmp$urban_rural_fact <- factor(ACDIS_bsi_tmp$urban_rural,
-                                     levels = c("Rural","Urban","Peri-Urban"))
+                                         levels = c("Rural","Urban","Peri-Urban"))
 
 ACDIS_bsi_tmp$pipsa  <- NA
 ACDIS_bsi_tmp$pipsa[ACDIS_bsi_tmp$PIPSA %in% c(1)] <- "Southern"
 ACDIS_bsi_tmp$pipsa[ACDIS_bsi_tmp$PIPSA %in% c(2)] <- "Northern"
 
 ACDIS_bsi_tmp$pipsa_fact <- factor(ACDIS_bsi_tmp$pipsa,
-                                         levels = c("Southern","Northern"))
+                                   levels = c("Southern","Northern"))
 
 ACDIS_bsi_tmp$km_clinic_cat <- NA
 ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic >= 0 & ACDIS_bsi_tmp$KmToNearestClinic <= 2 )] <- "0-2"
@@ -712,9 +712,9 @@ ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 4 & ACDIS_bsi_tmp
 ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 6 )] <- ">6"
 
 ACDIS_bsi_tmp$km_clinic_fact <- factor(ACDIS_bsi_tmp$km_clinic_cat,
-                                   levels = c("0-2",">2 -4",">4-6",">6"))
+                                       levels = c("0-2",">2 -4",">4-6",">6"))
 
-ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','urban_rural_fact','pipsa_fact','km_clinic_fact')]
+ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','Isigodi','urban_rural_fact','pipsa_fact','km_clinic_fact')]
 
 ### Getting mapping between HHId and BSId
 
@@ -728,9 +728,27 @@ ACDIS_Ind_SES_edu_BS <- merge(ACDIS_Ind_SES_edu,HH_BS,by.x=c('HouseholdId'),  by
 ACDIS_Ind_SES_edu_BS_full <- merge(ACDIS_Ind_SES_edu_BS,ACDIS_bsi_tmp2,by=c('BSIntId') )
 
 
+### Generate Gini Coefficents within Isigodi's
+
+## 
+## Loop through Mid years - subset data for mid year 
+## Loop through Isigodis for the year 
+## Output houseshold Id , Isigodi and prn_score and append to file 
+## Calculate Gini coefficeint for each Isigodi
+## Produce output file
+
+## Options 
+## https://search.r-project.org/CRAN/refmans/DescTools/html/Gini.html
+## https://rdrr.io/cran/REAT/man/gini.html 
+
+
+
+
+
+
+
 ### Save as RDS file 
 
-R_fname_edu_bs <- paste0(data_dir,"/Ind_Edu_SES_BS_combined.RDS")
+R_fname_edu_bs <- paste0(data_dir,"/Ind_Edu_SES_BS_year.RDS")
 ### Saving as RDS file
 saveRDS(ACDIS_Ind_SES_edu_BS_full  , file = R_fname_edu_bs)
-

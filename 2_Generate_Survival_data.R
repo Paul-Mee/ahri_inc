@@ -128,8 +128,8 @@ sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_d
 
 
 ### Read saved RDS file with SES quantiles
-#R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_BS_year.RDS") ### SES quantiles calculated within each year 
-R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_BS_combined.RDS") ### SES quantiles calculated across all years
+R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_BS_year.RDS") ### SES quantiles calculated within each year 
+#R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_BS_combined.RDS") ### SES quantiles calculated across all years
 Vis_SES <- readRDS(R_fname_SES_edu)
 
 ### Merge SES data 

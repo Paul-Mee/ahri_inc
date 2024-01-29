@@ -635,7 +635,7 @@ ACDIS_epi_quant_imp <- ungroup(ACDIS_epi_quant_imp)
 ### NB this doesn't take account of moves between households of differing SES
 
 
-ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
+ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','prn_score','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
 
 
 
@@ -706,7 +706,7 @@ ACDIS_bsi<- haven::read_dta(paste0(data_dir,bsi_fname))
 
 ## KMTONEARESTCLINIC
 
-ACDIS_bsi_tmp <- ACDIS_bsi[c('BSIntId','IsUrbanOrRural','PIPSA','KmToNearestClinic')]
+ACDIS_bsi_tmp <- ACDIS_bsi[c('BSIntId','Isigodi','IsUrbanOrRural','PIPSA','KmToNearestClinic')]
 
 ACDIS_bsi_tmp$urban_rural  <- NA
 
@@ -733,7 +733,7 @@ ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 6 )] <- ">6"
 ACDIS_bsi_tmp$km_clinic_fact <- factor(ACDIS_bsi_tmp$km_clinic_cat,
                                        levels = c("0-2",">2 -4",">4-6",">6"))
 
-ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','urban_rural_fact','pipsa_fact','km_clinic_fact')]
+ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','Isigodi','urban_rural_fact','pipsa_fact','km_clinic_fact')]
 
 ### Getting mapping between HHId and BSId
 

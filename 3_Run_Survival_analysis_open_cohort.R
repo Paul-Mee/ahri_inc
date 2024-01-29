@@ -7,7 +7,7 @@ rm(list = ls())
 # Define vector of package names
 
 package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','survival',
-                   'ggsurvfit','survivalAnalysis','NCmisc','devtools','finalfit')
+                   'ggsurvfit','survivalAnalysis','NCmisc','devtools','finalfit','survminer')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -26,7 +26,7 @@ sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 ### Set start and end dates for survival analysis 
 
 start_date <- as.Date("2018-01-01")
-end_date <- as.Date("2022-12-31")
+end_date <- as.Date("2021-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -79,8 +79,8 @@ print(paste0("Number of sero-conversions ",as.character(n_sero)))
 
 #### Selecting whether to use imputed data for wealth quantile and household
 
-surv_dat$SES <- surv_dat$wealth_quantile # 1) Those with complete SES data 
-#surv_dat$SES <- surv_dat$wealth_quant.imp1 # 2) those with imputed SES based on household 
+#surv_dat$SES <- surv_dat$wealth_quantile # 1) Those with complete SES data 
+surv_dat$SES <- surv_dat$wealth_quant.imp1 # 2) those with imputed SES based on household 
 #surv_dat$SES <- surv_dat$wealth_quant.imp2 # 3) those with imputed SES based on household and individual 
 
 ### SES as a factor
@@ -198,15 +198,24 @@ for (i in seq(1,length(covariates),1)) {
 ### tabulating results
 ### https://argoshare.is.ed.ac.uk/healthyr_book/cox-proportional-hazards-regression.html
 
+#### Plotting Forest plot for multiple Univariable regressions
+
+### https://github.com/kassambara/survminer/issues/459
+### Or this 
+### https://rdrr.io/cran/survivalAnalysis/man/forest_plot.html
+
 #### Multivariable analysis
 
 cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + highest_edu_fact, data =  surv_dat_anal,cluster=HouseholdId)
+res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + highest_edu_fact, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
 sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
 summary(res.cox)
 
+ggforest(model=res.cox)
+forest_fname <- paste0(data_dir,"/forest_multi_open_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(forest_fname, width=30, height=12, units="cm")
 
 #### Testing the proportional Hazards assumption 
 ### http://www.sthda.com/english/wiki/cox-model-assumptions
