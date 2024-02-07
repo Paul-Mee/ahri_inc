@@ -95,9 +95,23 @@ hiv <- setHIV(Args)
 # make one imputed dataset
 rtdat <- getRTData(hiv)
 mdat <- MIdata(rtdat, Args)
-
-
+## Using first imputed dataset
 sero_data_imput.df <- mdat[[1]]
+
+## Check using random date between late_neg and early positive
+#### Get a unique list of seroconverters
+sero_con.df <- sero_data_imput.df  %>% filter(!is.na(early_pos))
+sero_con.df <- unique(sero_con.df[,c('IIntID','late_neg','early_pos' )])
+#### Days between late neg and ealry pos
+sero_con.df$sero_days <- difftime(as.POSIXct(sero_con.df$early_pos), as.POSIXct(sero_con.df$late_neg), units="days")
+### Random number between 0 and 1 for each row
+sero_con.df$randoms <- runif(nrow(sero_con.df), min = 0, max = 1)
+sero_con.df$days_add <- round(sero_con.df$sero_days*sero_con.df$randoms)  
+sero_con.df$rand_sero_date <- sero_con.df$late_neg + sero_con.df$days_add
+sero_con.df <- unique(sero_con.df[,c('IIntID','rand_sero_date' )])
+### Merge to original dataframe
+sero_data_imput.df <- merge(sero_data_imput.df,sero_con.df,by='IIntID',all.X=TRUE)
+
 
 ### Earliest start date
 sero_data_imput.df <- sero_data_imput.df %>%
@@ -135,45 +149,100 @@ Vis_SES <- readRDS(R_fname_SES_edu)
 ### Merge SES data 
 sero_data_imput_ses.df  <- merge(sero_data_imput.df ,Vis_SES,by.x=c('IIntID','Year'),by.y=c('IIntId','Mid_Year'),all.x=TRUE)
 
-# ### Count number of NA values in imputed asset data by year 
-summary_dat <- sero_data_imput_ses.df %>% group_by(Year) %>% summarise(NA_sum = sum(is.na(wealth_quant.imp1)),n_ind = n())
-# ### Percentage NA values by year 
-summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
-# 
-print(n=25,summary_dat)
+# # ### Count number of NA values in imputed asset data by year 
+# summary_dat <- sero_data_imput_ses.df %>% group_by(Year) %>% summarise(NA_sum = sum(is.na(wealth_quant.imp1)),n_ind = n())
+# # ### Percentage NA values by year 
+# summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
+# # 
+# print(n=25,summary_dat)
 
+### Impute covariate data for missing episodes
+
+#### Remove individuals where all SES values are NA
+sero_data_imput_ses.df <- sero_data_imput_ses.df %>%
+  group_by(IIntID) %>%
+  filter( sum(!is.na(wealth_quant_pca.imp1)) > 0) %>%
+  ungroup
+
+#### Remove individuals where all Education values are NA
+sero_data_imput_ses.df <- sero_data_imput_ses.df %>%
+  group_by(IIntID) %>%
+  filter( sum(!is.na(highest_edu_fact)) > 0) %>%
+  ungroup
+
+### Numeric code for education levels 
+sero_data_imput_ses.df$highest_edu_num <- as.numeric(sero_data_imput_ses.df$highest_edu_fact)
+### Numeric code for PIPSA
+sero_data_imput_ses.df$pipsa_num <- as.numeric(sero_data_imput_ses.df$pipsa_fact)
+### Numeric code for Urban - Rural 
+sero_data_imput_ses.df$urban_rural_num <- as.numeric(sero_data_imput_ses.df$urban_rural_fact)
+
+
+sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
+  group_by(IIntID) %>%
+  arrange(Year) %>%
+  mutate(wealth_quant_pca.imp2 = imputeTS::na_locf(wealth_quant_pca.imp1)) %>%
+  mutate(wealth_quant_fa.imp2 = imputeTS::na_locf(wealth_quant_fa.imp1)) %>%
+  mutate(highest_edu_num.imp = imputeTS::na_locf(highest_edu_num)) %>% 
+  mutate(urban_rural_num.imp = imputeTS::na_locf(urban_rural_num)) 
+
+sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)  
+  
+### Convert education and urban - rural back to Factors
+
+sero_data_imput_ses.df$highest_edu_imp_fact <- NA
+
+sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==1] <- "None"
+sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==2] <- "Lower Primary"
+sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==3] <- "Higher Primary"
+sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==4] <- "Lower Secondary"
+sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==5] <- "Higher Secondary"
+sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==6] <- "Tertiary"
+
+sero_data_imput_ses.df$highest_edu_imp_fact <- factor(sero_data_imput_ses.df$highest_edu_imp_fact,
+                                     levels = c("None","Lower Primary","Higher Primary",
+                                                "Lower Secondary","Higher Secondary","Tertiary"))
+
+sero_data_imput_ses.df$urban_rural_imp_fact <- NA
+
+sero_data_imput_ses.df$urban_rural_imp_fact[sero_data_imput_ses.df$urban_rural_num.imp == 1 ] <- "Rural"
+sero_data_imput_ses.df$urban_rural_imp_fact[sero_data_imput_ses.df$urban_rural_num.imp == 2 ] <- "Urban"
+sero_data_imput_ses.df$urban_rural_imp_fact[sero_data_imput_ses.df$urban_rural_num.imp == 3 ]  <- "Peri-Urban"
+
+sero_data_imput_ses.df$urban_rural_imp_fact <- factor(sero_data_imput_ses.df$urban_rural_imp_fact,
+                                         levels = c("Rural","Urban","Peri-Urban"))
 
 ### Count number of individuals with missing data for wealth_quant.imp2 
 
-tmp_miss_ses  <-    sero_data_imput_ses.df %>%
-                    filter(is.na(wealth_quant.imp2)) 
-
-n_miss_ses <- NROW(unique(tmp_miss_ses[c('IIntID')]))
-
-n_all_ind <- NROW(unique(sero_data_imput_ses.df[c('IIntID')]))
-
-percent_miss <- n_miss_ses/n_all_ind*100
-
-print(paste0("Individuals with no imputed SES - n/N(%) = ",
-             as.character(n_miss_ses),
-             "/",
-             as.character(n_all_ind),
-             "(",
-             as.character(percent_miss),
-             ")"))
-
-
-## Total individuals 
-tmp_miss_ses <- unique(sero_data_imput_ses.df[c('IIntID')])
-
-### If no recorded Household ID in a particular year place individual in the last recorded household
-
-sero_data_imput_ses.df     <- sero_data_imput_ses.df %>% 
-  group_by(IIntID) %>%
-  arrange(Year) %>%
-  mutate(HouseholdId_imp = if(all(is.na(HouseholdId))) NA 
-         else imputeTS::na_locf(HouseholdId))
-sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)
+# tmp_miss_ses  <-    sero_data_imput_ses.df %>%
+#                     filter(is.na(wealth_quant.imp2)) 
+# 
+# n_miss_ses <- NROW(unique(tmp_miss_ses[c('IIntID')]))
+# 
+# n_all_ind <- NROW(unique(sero_data_imput_ses.df[c('IIntID')]))
+# 
+# percent_miss <- n_miss_ses/n_all_ind*100
+# 
+# print(paste0("Individuals with no imputed SES - n/N(%) = ",
+#              as.character(n_miss_ses),
+#              "/",
+#              as.character(n_all_ind),
+#              "(",
+#              as.character(percent_miss),
+#              ")"))
+# 
+# 
+# ## Total individuals 
+# tmp_miss_ses <- unique(sero_data_imput_ses.df[c('IIntID')])
+# 
+# ### If no recorded Household ID in a particular year place individual in the last recorded household
+# 
+# sero_data_imput_ses.df     <- sero_data_imput_ses.df %>% 
+#   group_by(IIntID) %>%
+#   arrange(Year) %>%
+#   mutate(HouseholdId_imp = if(all(is.na(HouseholdId))) NA 
+#          else imputeTS::na_locf(HouseholdId))
+# sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)
 
 ### Generate categorical age group variable
 ### age_cat 15-25,25-40,40-65, >65
@@ -189,16 +258,20 @@ sero_data_imput_ses.df$age_cat <-  ifelse((sero_data_imput_ses.df$Age >= 15 & se
 sero_data_imput_ses.df$age_cat  <- factor(sero_data_imput_ses.df$age_cat , levels = c("15-24", "25-39" , "40-64",   ">65"),
               labels = c("15-24", "25-39" , "40-64",   ">65"))
 
-### Generate cohort of interest 
-### Include all individuals HIV negative and under surveillance at the start date 
-### Follow until sero-conversion , last known HIV negative test or loss to follow-up 
-
-
-
 ### Sex as a factor 
 sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(0, 1),
                                         labels = c("Male", "Female"))
 
+### Select variables of interest
+
+sero_data_imput_ses.df <- sero_data_imput_ses.df[c('IIntID','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date','rand_sero_date',
+                                                   'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
+                                                   'censor_date','highest_edu_imp_fact','urban_rural_imp_fact',
+                                                   'wealth_quant_fa.imp2','wealth_quant_pca.imp2')]
+sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Highest_Education = highest_edu_imp_fact )
+sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Urban_Rural = urban_rural_imp_fact)
+sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Wealth_Quant_FA = wealth_quant_fa.imp2)
+sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Wealth_Quant_PCA = wealth_quant_pca.imp2)
 
 R_fname_survdat <- paste0(data_dir,"/Survdata.RDS")
 ### Saving as RDS file
