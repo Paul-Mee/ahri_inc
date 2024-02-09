@@ -25,8 +25,8 @@ sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2018-01-01")
-end_date <- as.Date("2021-12-31")
+start_date <- as.Date("2010-01-01")
+end_date <- as.Date("2022-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -80,8 +80,14 @@ print(paste0("Number of sero-conversions ",as.character(n_sero)))
 #### Selecting whether to use imputed data for wealth quantile and household
 
 #surv_dat$SES <- surv_dat$wealth_quantile # 1) Those with complete SES data 
-surv_dat$SES <- surv_dat$wealth_quant.imp1 # 2) those with imputed SES based on household 
+#surv_dat$SES <- surv_dat$wealth_quant.imp1 # 2) those with imputed SES based on household 
 #surv_dat$SES <- surv_dat$wealth_quant.imp2 # 3) those with imputed SES based on household and individual 
+
+#Wealth Quantile from Factor Analysis 
+surv_dat$SES <- surv_dat$Wealth_Quant_FA
+
+#Wealth Quantile from PCA
+#surv_dat$SES <- surv_dat$Wealth_Quant_PCA
 
 ### SES as a factor
 surv_dat$SES <- factor(surv_dat$SES,
@@ -93,27 +99,37 @@ surv_dat$SES <- factor(surv_dat$SES,
 #### Missing data analysis 
 #### Generate a table of missing data by episode for age and sex
 
-surv_dat$included = 1 
-surv_dat$included[is.na(surv_dat$SES)] <-0
-
-table(surv_dat$age_cat,surv_dat$included)
-prop.table(table(surv_dat$age_cat,surv_dat$included),1)
-chisq.test(table(surv_dat$age_cat,surv_dat$included),correct=FALSE)
+# surv_dat$included = 1 
+# surv_dat$included[is.na(surv_dat$SES)] <-0
+# 
+# table(surv_dat$age_cat,surv_dat$included)
+# prop.table(table(surv_dat$age_cat,surv_dat$included),1)
+# chisq.test(table(surv_dat$age_cat,surv_dat$included),correct=FALSE)
 
 #### Missing data analysis 
 #### Generate a table of missing data by episode for age and sex
 
-
-table(surv_dat$sex,surv_dat$included)
-prop.table(table(surv_dat$sex,surv_dat$included),1)
-chisq.test(table(surv_dat$sex,surv_dat$included),correct=FALSE)
+# 
+# table(surv_dat$sex,surv_dat$included)
+# prop.table(table(surv_dat$sex,surv_dat$included),1)
+# chisq.test(table(surv_dat$sex,surv_dat$included),correct=FALSE)
 
 ### Create time variable 
 ### Set end date of observation to censor date if censor date is between the start and end of the observation
-surv_dat$obs_end[ (surv_dat$obs_start < surv_dat$censor_date)   & (surv_dat$obs_end > surv_dat$censor_date)] <- surv_dat$censor_date
+
+surv_dat <- surv_dat %>%
+  mutate(obs_end=ifelse( ((obs_start < censor_date) & 
+                            (obs_end > censor_date)), censor_date, obs_end ))
+surv_dat$obs_end <- as.Date(surv_dat$obs_end)
+
 
 ### Set end date of observation to end date if end date is between the start and end of the observation
-surv_dat$obs_end[ (surv_dat$obs_start < end_date)   & (surv_dat$obs_end > end_date)] <- end_date
+
+surv_dat <- surv_dat %>%
+  mutate(obs_end=ifelse( ((surv_dat$obs_start < end_date) & 
+                            (surv_dat$obs_end > end_date)), end_date, obs_end ))
+surv_dat$obs_end <- as.Date(surv_dat$obs_end)
+
 
 ### ntime length of time between start and end of observation
 
@@ -138,10 +154,10 @@ write.csv(sum_event_ses_obs,file = events_fname)
 
 ### Keep required variables for analysis
 
-surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId','Year','sex','age_cat','SES','highest_edu_fact',
-                             'urban_rural_fact','pipsa_fact','km_clinic_fact','obs_start','obs_end','ntime','sero_event')]
+# surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId','Year','sex','age_cat','SES','highest_edu_fact',
+#                              'urban_rural_fact','pipsa_fact','km_clinic_fact','obs_start','obs_end','ntime','sero_event')]
 
-
+surv_dat_anal <- surv_dat
 
 ### Sero Events by starting SES group 
 
@@ -175,7 +191,7 @@ ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
 #### Univariable analysis 
 
 
-covariates <- c('age_cat', 'sex',  'SES', 'highest_edu_fact','urban_rural_fact','pipsa_fact')
+covariates <- c('age_cat', 'sex',  'SES', 'Highest_Education','Urban_Rural')
 univ_formulas <- sapply(covariates,
                         function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
 
@@ -207,7 +223,7 @@ for (i in seq(1,length(covariates),1)) {
 #### Multivariable analysis
 
 cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + highest_edu_fact, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
+res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + Highest_Education + Urban_Rural, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
 sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
@@ -232,11 +248,13 @@ test.ph
 
 #### Summary analysis using finalfit
 
-covariates <- c('age_cat', 'sex',  'SES', 'highest_edu_fact','urban_rural_fact')
+covariates <- c('age_cat', 'sex',  'SES', 'Highest_Education' , 'Urban_Rural','cluster(HouseholdId)')
 dependent <- "Surv(time=ntime, event=sero_event==1)"
 
+
 surv_dat_anal %>%
-  finalfit::finalfit(dependent=dependent ,explanatory = covariates,add_dependent_label = FALSE) -> t1 
+  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
+                       add_dependent_label = FALSE) -> t1 
   # rename("Overall survival" = label) %>% 
   # rename(" " = levels) %>% 
   # rename("  " = all) -> t1
@@ -245,3 +263,4 @@ knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 ### Use r markdown to get nicely formatted tables in Word
 
 ### https://argoshare.is.ed.ac.uk/healthyr_book/ms-word-via-knitrr-markdown.html
+

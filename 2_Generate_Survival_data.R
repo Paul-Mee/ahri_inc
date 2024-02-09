@@ -113,6 +113,7 @@ sero_con.df <- unique(sero_con.df[,c('IIntID','rand_sero_date' )])
 sero_data_imput.df <- merge(sero_data_imput.df,sero_con.df,by='IIntID',all.X=TRUE)
 
 
+
 ### Earliest start date
 sero_data_imput.df <- sero_data_imput.df %>%
   group_by(IIntID) %>%
@@ -134,8 +135,12 @@ sero_data_imput.df <- ungroup(sero_data_imput.df)
 
 sero_data_imput.df$censor_date <- NA
 
+# sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
+#                         ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
+
+### testing random sero date
 sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
-                        ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
+                                         ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$rand_sero_date, "No"))
 
 sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_date), origin = "1970-01-01" )
 
@@ -177,6 +182,7 @@ sero_data_imput_ses.df$pipsa_num <- as.numeric(sero_data_imput_ses.df$pipsa_fact
 ### Numeric code for Urban - Rural 
 sero_data_imput_ses.df$urban_rural_num <- as.numeric(sero_data_imput_ses.df$urban_rural_fact)
 
+##  If houseshold missing place in most recent previous house
 
 sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   group_by(IIntID) %>%
@@ -184,7 +190,8 @@ sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   mutate(wealth_quant_pca.imp2 = imputeTS::na_locf(wealth_quant_pca.imp1)) %>%
   mutate(wealth_quant_fa.imp2 = imputeTS::na_locf(wealth_quant_fa.imp1)) %>%
   mutate(highest_edu_num.imp = imputeTS::na_locf(highest_edu_num)) %>% 
-  mutate(urban_rural_num.imp = imputeTS::na_locf(urban_rural_num)) 
+  mutate(urban_rural_num.imp = imputeTS::na_locf(urban_rural_num)) %>%
+  mutate(HouseholdId = imputeTS::na_locf(HouseholdId))   
 
 sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)  
   
@@ -264,10 +271,11 @@ sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(
 
 ### Select variables of interest
 
-sero_data_imput_ses.df <- sero_data_imput_ses.df[c('IIntID','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date','rand_sero_date',
+sero_data_imput_ses.df <- sero_data_imput_ses.df[c('IIntID','HouseholdId','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date','rand_sero_date',
                                                    'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
                                                    'censor_date','highest_edu_imp_fact','urban_rural_imp_fact',
                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2')]
+
 sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Highest_Education = highest_edu_imp_fact )
 sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Urban_Rural = urban_rural_imp_fact)
 sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Wealth_Quant_FA = wealth_quant_fa.imp2)
