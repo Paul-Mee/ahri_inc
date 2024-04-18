@@ -32,14 +32,14 @@ pacman::p_load(char=package_names)
 # Define Parameters for PCA calculation 
 
 n_fact = 3 # Number of PCA factors
-n_quant = 5 # Number of quantiles
+n_quant = 3 # Number of quantiles
 
 ### Loading Household Asset data 
 
-stata_data_file <- '/RD06-99 ACDIS HSE-H All.dta'
+stata_data_file <- '/RD06-99 ACDIS HSE-H All-feb24.dta'
 ACDIS_hh <- haven::read_dta(paste0(data_dir,stata_data_file))
 
-tmp <-  dplyr::filter(ACDIS_hh, HHIntId == 44836 )
+#tmp <-  dplyr::filter(ACDIS_hh, HHIntId == 44836 )
 ### Extract year from visit date 
 
 ACDIS_hh$Visit_Year <- lubridate::year(ACDIS_hh$VisitDate)
@@ -366,6 +366,8 @@ item_list <- c( "BED",
 
 ## check data 
 
+### Create tab.df which shows the number of time each variable was collected in each year 
+
 tab.df <- as.data.frame(unique(ACDIS_hh$Visit_Year))
 names(tab.df)[1] <- "Visit_Year"
 
@@ -426,24 +428,24 @@ asset_list <- c("HHIntId",
                 "VCR",
                 "WBR",
                 "HWG",
-                "WSM"
-                # "EHT",
-                # "PHT",
-                # "SHF",
-                # "CPT",
-                # "VAN",
-                # "LOR",
-                # "TFV",
-                # "FRN",
-                # "JWT",
-                # "ACN",
-                # "DIS",
-                # "MIC",
-                # "PTV",
-                # "SEC",
-                # "SWP",
-                # "TUM",
-                # "VAC"
+                "WSM",
+                "EHT",
+                "PHT",
+                "SHF",
+                "CPT",
+                "VAN",
+                "LOR",
+                "TFV",
+                "FRN",
+                "JWT",
+                "ACN",
+                "DIS",
+                "MIC",
+                "PTV",
+                "SEC",
+                "SWP",
+                "TUM",
+                "VAC"
                 )
 
 ### Create new dataframe with just required data 
@@ -470,9 +472,11 @@ ass_data <- ass_data %>%
 ass_data <- ass_data %>% filter(rank==1)
 
 
-## Select data for 2003 to 2021 and 2023
+## Select data for 2003 to 2023
 
-ass_data_select <- ass_data %>% filter(Visit_Year >= 2003 & Visit_Year != 2022)
+ass_data_select <- ass_data %>% filter(Visit_Year >= 2003 & Visit_Year <= 2023)
+#ass_data_select <- ass_data %>% filter(Visit_Year >= 2005 & Visit_Year <= 2006)
+
 
 #ass_data_select <- ass_data %>% filter(Visit_Year == 2012)
 
@@ -481,7 +485,7 @@ ass_data_select <- ass_data %>% filter(Visit_Year >= 2003 & Visit_Year != 2022)
 year_list <- sort(unique(ass_data_select$Visit_Year))
 year_list
 
-year = 2007
+#year = 2005
 
 #### Loop through a list of years
 for (year in year_list){
@@ -494,7 +498,7 @@ for (year in year_list){
     
     print(paste0("Total number of rows with missing data = ",as.character(sum(!complete.cases(ass_data_year))) ))
     
-    colnames(ass_data_select)
+    #colnames(ass_data_select)
     
     for (var in colnames(ass_data_select)){
       print(paste0("Total number of rows with missing data for ",var," = ",as.character(sum(is.na(ass_data_year[var]))) ))
@@ -591,8 +595,8 @@ for (year in year_list){
     
     CI_Factor_estimated <-  Compind::ci_factor(ass_data_tmp,
                                                indic_col = (1:ncol(ass_data_tmp)),
-                                               method = "CH",  
-                                               dim=5)
+                                               method = "CH",
+                                               dim=3)
     ## Overall Score 
     fa_score <- data.frame( CI_Factor_estimated$ci_factor_est)
     fa_score$HHIntId <- row.names(fa_score)
@@ -608,8 +612,8 @@ for (year in year_list){
     
     ## basic Scatter Plot
     # basic scatterplot
-    ggplot(ass_data_year, aes(x=pca_1d_score, y=fa_score)) + 
-      geom_point()
+    # ggplot(ass_data_year, aes(x=pca_1d_score, y=fa_score)) +
+    #   geom_point()
     
     ### Analysing PCA output
     # 
@@ -641,6 +645,9 @@ for (year in year_list){
         
     ass_data_ses_year <- ass_data_year[,c('HHIntId','Visit_Year','pca_1d_score','wealth_quantile_pca', 'fa_score','wealth_quantile_fa' )]
         
+    #ass_data_ses_year <- ass_data_year[,c('HHIntId','Visit_Year','pca_1d_score','wealth_quantile_pca' )]
+    
+    
         ### Append to overall dataframe      
         if(exists("ass_ses_all")==FALSE) {
           ass_ses_all <- ass_data_ses_year
@@ -650,8 +657,6 @@ for (year in year_list){
 }
 
 
-
-  
 ### Interpolation for missing data
 ### Interpolate to get a value for each household for each year
 ### use locf - carry forward last observation
@@ -697,38 +702,19 @@ ass_ses_full_imp  <- ass_ses_full %>%
 ass_ses_full_imp  <- ungroup(ass_ses_full_imp )
 
 
-#### Now use the surveillance episodes dataset to get a 
-#### quantile value for each individual in each year they were
-#### included in the surveillance by i) linking the household quantile data 
-#### to the individual surveillance and ii) interpolating for missing data using 
-#### locf as before 
+#### Load data-set with a row for each year an individual was resident in a household
+#### To create this file need to run "O_Household_Residence_Episodes.R" once
 
-stata_data_file <- "/SurveillanceEpisodesHIV.dta"
-ACDIS_epi <- haven::read_dta(paste0(data_dir,stata_data_file))
-# 
-### Select Visit_Year as mid point in episode from epi file 
-### Merge on HHIntId = HouseholdId and Visit_Year = Mid_Visit_year
-# 
-ACDIS_epi$Start_Year <- lubridate::year(ACDIS_epi$StartDate)
-ACDIS_epi$End_Year <- lubridate::year(ACDIS_epi$EndDate)
-# 
-ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
-# 
-# 
-## Ranking by Individual Id , Mid_year
-ACDIS_epi <- ACDIS_epi %>%
-  group_by(IIntId,Mid_Year) %>%
-  dplyr::mutate(rank = order(order(StartDate, decreasing=FALSE)))
-# 
-# 
-# ### If multiple visits in a year just use first one
-ACDIS_epi <- ACDIS_epi %>% filter(rank==1)
+epi_data_file <- "/House_Res_Episodes.RDS"
+ACDIS_epi_full <- readRDS(paste0(data_dir,epi_data_file))
+
+
 # 
 # ## NB this includes years in which no household asset data was collected - hence NA values below are not really missing data 
 # 
 # ### Merge with asset data 
 # 
-ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full_imp,by.x = (c("HouseholdId","Mid_Year")),
+ACDIS_epi_quant <- merge(ACDIS_epi_full,ass_ses_full_imp,by.x = (c("HouseholdId","Res_Year")),
                                               by.y= (c("HHIntId","Visit_Year")),all.x=TRUE)
 # 
 # # ### Count number of NA values by year 
@@ -740,24 +726,12 @@ ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full_imp,by.x = (c("HouseholdId","Mid
 # 
 # 
 # 
-# 
-# ### Imputation for Individuals where there are any imputed wealth quantile variables available
-# 
-# ACDIS_epi_quant_imp  <- ACDIS_epi_quant %>%
-#   group_by(IIntId) %>%
-#   arrange(Mid_Year) %>%
-#   mutate(allNA = all(is.na(wealth_quant.imp1)),
-#          wealth_quant.imp2 = if(!allNA[1]) imputeTS::na_locf(wealth_quant.imp1) else wealth_quant.imp1)
-# 
-# ACDIS_epi_quant_imp <- ungroup(ACDIS_epi_quant_imp)
-# 
-# ### NB this doesn't take account of moves between households of differing SES
-# 
-# 
-# ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','prn_score','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
 
-ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','HouseholdId','pca_1d_score','wealth_quantile_pca',
-                                         'wealth_quant_pca.imp1','wealth_quantile_fa','wealth_quant_fa.imp1')]
+
+
+ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Res_Year','IIntId','HouseholdId','pca_1d_score','wealth_quantile_pca',
+                                         'wealth_quant_pca.imp1','fa_score','wealth_quantile_fa','wealth_quant_fa.imp1')]
+
 
 #### Loading Education data 
 ### Loading Individual level data for Education variables 
@@ -803,12 +777,15 @@ ACDIS_edu$highest_edu_fact <- factor(ACDIS_edu$highest_edu,
 #Merge with SES data
 ACDIS_edu <- ACDIS_edu[c('IIntId', 'Visit_Year', 'highest_edu_fact')]
 
-ACDIS_Ind_SES_edu <- merge(ACDIS_Ind_SES,ACDIS_edu,by.x = c('IIntId','Mid_Year'),by.y = c('IIntId','Visit_Year'),all.x = TRUE)
+ACDIS_Ind_SES_edu <- merge(ACDIS_Ind_SES,ACDIS_edu,by.x = c('IIntId','Res_Year'),by.y = c('IIntId','Visit_Year'),all.x = TRUE)
 
 # Loading Bonded Structure Data
 
 bsi_fname="/RD01-03 ACDIS BoundedStructures.dta"
 ACDIS_bsi<- haven::read_dta(paste0(data_dir,bsi_fname))
+
+ggplot(ACDIS_bsi, aes(x=KmToNearestClinic)) +
+  geom_histogram()
 
 ### Keep required variables 
 ### ddi-documentation-english-1088.pdf 
@@ -850,7 +827,16 @@ ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 4 & ACDIS_bsi_tmp
 ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 6 )] <- ">6"
 
 ACDIS_bsi_tmp$km_clinic_fact <- factor(ACDIS_bsi_tmp$km_clinic_cat,
-                                       levels = c("0-2",">2 -4",">4-6",">6"))
+                                       levels = c("0-2",">2-4",">4-6",">6"))
+
+# ggplot(ACDIS_bsi, aes(x=KmToNearestClinic)) +
+#   geom_histogram(binwidth = 0.2)
+# 
+# ggplot(ACDIS_bsi_tmp, aes(x=km_clinic_fact)) +
+#   geom_histogram(stat = "count")
+
+
+### NB no households between 2 and 4 km from the clinic
 
 ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','Isigodi','urban_rural_fact','pipsa_fact','km_clinic_fact')]
 

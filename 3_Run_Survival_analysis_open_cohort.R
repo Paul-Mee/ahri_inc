@@ -7,7 +7,8 @@ rm(list = ls())
 # Define vector of package names
 
 package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','survival',
-                   'ggsurvfit','survivalAnalysis','NCmisc','devtools','finalfit','survminer')
+                   'ggsurvfit','survivalAnalysis','NCmisc','devtools','finalfit','survminer',
+                   'lubridate')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -25,8 +26,8 @@ sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2010-01-01")
-end_date <- as.Date("2022-12-31")
+start_date <- as.Date("2015-01-01")
+end_date <- as.Date("2021-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -44,15 +45,20 @@ end_date <- as.Date("2022-12-31")
 ### First start date > start date and < end_date 
 ### and late_neg > first_start_date
 
-surv_dat_1 <- dplyr::filter(sero_data_imput_ses.df,((sero_data_imput_ses.df$late_neg >= start_date) &
-                                                    (sero_data_imput_ses.df$first_start_date <= start_date) &
-                                                    sero_data_imput_ses.df$last_end_date > start_date))
+# surv_dat_1 <- dplyr::filter(sero_data_imput_ses.df,((sero_data_imput_ses.df$late_neg >= start_date) &
+#                                                     (sero_data_imput_ses.df$first_start_date <= start_date) &
+#                                                     sero_data_imput_ses.df$last_end_date > start_date))
+# 
+# surv_dat_2 <- dplyr::filter(sero_data_imput_ses.df,((sero_data_imput_ses.df$late_neg >= first_start_date) &
+#                                                       (sero_data_imput_ses.df$first_start_date > start_date) &
+#                                                       sero_data_imput_ses.df$first_start_date < end_date))
 
-surv_dat_2 <- dplyr::filter(sero_data_imput_ses.df,((sero_data_imput_ses.df$late_neg >= first_start_date) &
-                                                      (sero_data_imput_ses.df$first_start_date > start_date) &
-                                                      sero_data_imput_ses.df$first_start_date < end_date))
+surv_dat <- dplyr::filter(sero_data_imput_ses.df,((sero_data_imput_ses.df$late_neg >= first_start_date) &
+                                                    (sero_data_imput_ses.df$late_neg >= start_date) &
+                                                    (sero_data_imput_ses.df$first_start_date <= end_date)))
 
-surv_dat <- rbind(surv_dat_1,surv_dat_2)
+
+# surv_dat <- rbind(surv_dat_1,surv_dat_2)
 
 #### Select relevant episodes for these individuals 
 #### observation ends after start date and observations start before the end date
@@ -77,21 +83,21 @@ print(paste0("Number in starting cohort - HIV negative on ",as.character(start_d
 print(paste0("Number of sero-conversions ",as.character(n_sero)))
 
 
-#### Selecting whether to use imputed data for wealth quantile and household
 
-#surv_dat$SES <- surv_dat$wealth_quantile # 1) Those with complete SES data 
-#surv_dat$SES <- surv_dat$wealth_quant.imp1 # 2) those with imputed SES based on household 
-#surv_dat$SES <- surv_dat$wealth_quant.imp2 # 3) those with imputed SES based on household and individual 
 
 #Wealth Quantile from Factor Analysis 
-surv_dat$SES <- surv_dat$Wealth_Quant_FA
+#surv_dat$SES <- surv_dat$Wealth_Quant_FA
 
 #Wealth Quantile from PCA
-#surv_dat$SES <- surv_dat$Wealth_Quant_PCA
+surv_dat$SES <- surv_dat$Wealth_Quant_PCA
 
 ### SES as a factor
+# surv_dat$SES <- factor(surv_dat$SES,
+#                         levels = c("1","2","3","4","5"))
+
 surv_dat$SES <- factor(surv_dat$SES,
-                        levels = c("1","2","3","4","5"))
+                        levels = c("1","2","3"),
+                        labels = c("Poorest", "Mid", "Wealthiest"))
 
 ## If using imputed Household ID's 
 #surv_dat$HouseholdId <- surv_dat$HouseholdId_imp
@@ -163,10 +169,9 @@ surv_dat_anal <- surv_dat
 
 
 
-plot_title <- paste0("Kaplan-Meier plot (failure = seroconversion) \n Open cohort from  ",start_date,
-                     " - Censored on ",end_date,
-                     "\n SES at start of period")
-
+plot_title <- paste0("Kaplan-Meier plot  \n 
+Probability of seroconversion within each year of observation from  ",lubridate::year(start_date),
+                     " to ",lubridate::year(end_date))
 
 
 p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat_anal,id=IIntID,cluster=HouseholdId)%>% 
@@ -174,13 +179,93 @@ p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat_anal,i
   labs(
     x = "Days to serconversion",
     y = "Survival Probability",
-    title = plot_title
-  ) 
+    title = plot_title,
+    colour = "SES"
+  )  +
+  scale_color_manual(values = c('red', 'blue','green'),
+                    labels = c('Poorest', 'Mid','Wealthiest')) +
+  theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
+        legend.text=element_text(size=12,face="bold"),
+        axis.text.x = element_text(size=12, face="bold", color = "black"),
+        axis.text.y = element_text(size=12, face="bold", color = "black"),
+        axis.title = element_text(face="bold"),
+        legend.title = element_text(face="bold"),
+        legend.position=c(.75,.75)) 
 p2
 
-plot_fname <- paste0(data_dir,"/km_all_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(paste0(plot_fname),p2,  width=20, height=15, units="cm")
 
+
+plot_fname <- paste0(data_dir,"/km_all_open_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(plot_fname,p2,  width=20, height=15, units="cm")
+
+
+
+
+
+### New version where each individual has one row and we use average SES at end of the period
+
+### Calculate mean SES value
+### Final status
+surv_dat_anal <- surv_dat_anal %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(mean_SES = round((mean(Wealth_Quant_PCA))))
+
+### First obs_start
+surv_dat_anal <- surv_dat_anal %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(first_obs_start = min(obs_start))
+
+### Last obs_end
+surv_dat_anal <- surv_dat_anal %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(last_obs_end = max(obs_end))
+
+surv_dat_anal <- ungroup(surv_dat_anal)
+
+
+surv_dat_anal_total <- unique(surv_dat_anal[c('IIntID','first_obs_start',
+                                       'last_obs_end','final_sero_status','mean_SES')])
+
+surv_dat_anal_total$SES <- factor(surv_dat_anal_total$mean_SES,
+                        levels = c("1","2","3"),
+                        labels = c("Poorest", "Mid", "Wealthiest"))
+
+
+surv_dat_anal_total$ntime <- surv_dat_anal_total$last_obs_end - surv_dat_anal_total$first_obs_start
+
+### maximum ntime
+max_ntime = as.integer(max(surv_dat_anal_total$ntime))
+
+### Sero Events by average SES group 
+
+plot_title <- paste0("Kaplan-Meier plot  \n 
+Probability of seroconversion from  ",lubridate::year(start_date),
+                     " to ",lubridate::year(end_date))
+
+
+p3 <-  survfit(Surv(time=ntime, event=final_sero_status==1) ~ SES, data=surv_dat_anal_total,id=IIntID)%>% 
+  ggsurvfit(type = "survival") +
+  labs(
+    x = "Days to serconversion",
+    y = "Survival Probability",
+    title = "",
+    colour = "SES"
+  )  +
+  scale_color_manual(values = c('red', 'blue','green'),
+                     labels = c('Poorest', 'Mid','Wealthiest')) +
+  theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
+        legend.text=element_text(size=12,face="bold"),
+        axis.text.x = element_text(size=12, face="bold", color = "black"),
+        axis.text.y = element_text(size=12, face="bold", color = "black"),
+        axis.title = element_text(face="bold"),
+        legend.title = element_text(face="bold"),
+        legend.position=c(.75,.75)) +
+   scale_x_continuous(limits=c(0,max_ntime-10 ))
+p3
+
+
+plot_fname <- paste0(data_dir,"/km_total_open_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(plot_fname,p3,  width=20, height=15, units="cm")
 
 
 ### Cox Regression  - Age - SES fixed at start of period
@@ -222,16 +307,79 @@ for (i in seq(1,length(covariates),1)) {
 
 #### Multivariable analysis
 
+## Rename variables
+surv_dat_anal <- dplyr::rename(surv_dat_anal, Education = Highest_Education )
+surv_dat_anal <- dplyr::rename(surv_dat_anal, Setting = Urban_Rural)
+surv_dat_anal <- dplyr::rename(surv_dat_anal, Age = age_cat)
+surv_dat_anal <- dplyr::rename(surv_dat_anal, Sex = sex)
+
 cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~ age_cat + sex + SES + Highest_Education + Urban_Rural, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
+res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex + Education + Setting, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
 sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
 summary(res.cox)
 
-ggforest(model=res.cox)
+forest_title <- paste0("Multivariate Cox PH regression model  
+Hazard Ratio for serconversion ",year(start_date)," to ",year(end_date))
+
+p4 <- ggforest(model=res.cox,
+         main = forest_title,
+         cpositions = c(0.02, 0.12, 0.3),
+         fontsize = 1.0) 
+       
+p4
+
+
 forest_fname <- paste0(data_dir,"/forest_multi_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(forest_fname, width=30, height=12, units="cm")
+ggsave(forest_fname,p4, width=30, height=18, units="cm")
+
+
+### Forest plot SES univariable
+
+cox_fname <- paste0(data_dir,"/cox_uni_open_",as.character(start_date),"_",as.character(end_date),".txt")
+#res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex , data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
+#res.cox <- coxph(Surv(ntime, sero_event) ~  SES , data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
+res.cox <- coxph(Surv(ntime, sero_event) ~  SES , data =  as.data.frame(surv_dat_anal))
+sink(cox_fname,append=FALSE)
+summary(res.cox)
+sink(file=NULL)
+summary(res.cox)
+
+forest_title <- paste0("Univariable Cox PH regression model  
+Hazard Ratio for serconversion ",year(start_date)," to ",year(end_date))
+
+p5 <- ggforest(model=res.cox,
+               main = "",
+               cpositions = c(0.02, 0.1, 0.35),
+               fontsize = 1.1) 
+
+p5
+forest_fname <- paste0(data_dir,"/forest_uni_open_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(forest_fname,p5, width=20, height=8, units="cm")
+
+### Forest plot SES control for Age and Sex
+
+cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
+res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex , data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
+
+sink(cox_fname,append=FALSE)
+summary(res.cox)
+sink(file=NULL)
+summary(res.cox)
+
+forest_title <- paste0("Univariable Cox PH regression model  
+Hazard Ratio for serconversion ",year(start_date)," to ",year(end_date))
+
+p6 <- ggforest(model=res.cox,
+               main = "",
+               cpositions = c(0.02, 0.1, 0.35),
+               fontsize = 1.1) 
+
+p6
+forest_fname <- paste0(data_dir,"/forest_multi_open_",as.character(start_date),"_",as.character(end_date),".png")
+ggsave(forest_fname,p6, width=20, height=8, units="cm")
+
 
 #### Testing the proportional Hazards assumption 
 ### http://www.sthda.com/english/wiki/cox-model-assumptions
@@ -248,7 +396,8 @@ test.ph
 
 #### Summary analysis using finalfit
 
-covariates <- c('age_cat', 'sex',  'SES', 'Highest_Education' , 'Urban_Rural','cluster(HouseholdId)')
+#covariates <- c('Age', 'Sex',  'SES', 'Education' , 'Setting','cluster(HouseholdId)')
+covariates <- c('Age', 'Sex',  'Education','cluster(HouseholdId)')
 dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 
@@ -264,3 +413,37 @@ knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 
 ### https://argoshare.is.ed.ac.uk/healthyr_book/ms-word-via-knitrr-markdown.html
 
+### Subdivide by gender
+
+surv_dat_anal_male <- filter(surv_dat_anal,(surv_dat_anal$Sex=="Male"))
+surv_dat_anal_female <- filter(surv_dat_anal,(surv_dat_anal$Sex=="Female"))
+
+covariates <- c( 'Age','Education','cluster(HouseholdId)')
+dependent <- "Surv(time=ntime, event=sero_event==1)"
+
+
+
+surv_dat_anal %>%
+  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
+                           add_dependent_label = FALSE) -> t1 
+# rename("Overall survival" = label) %>% 
+# rename(" " = levels) %>% 
+# rename("  " = all) -> t1
+knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+
+surv_dat_anal_male %>%
+  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
+                           add_dependent_label = FALSE) -> t1 
+# rename("Overall survival" = label) %>% 
+# rename(" " = levels) %>% 
+# rename("  " = all) -> t1
+knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+
+
+surv_dat_anal_female %>%
+  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
+                           add_dependent_label = FALSE) -> t1 
+# rename("Overall survival" = label) %>% 
+# rename(" " = levels) %>% 
+# rename("  " = all) -> t1
+knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
