@@ -93,11 +93,12 @@ surv_dat$SES <- surv_dat$Wealth_Quant_PCA
 
 ### SES as a factor
 # surv_dat$SES <- factor(surv_dat$SES,
-#                         levels = c("1","2","3","4","5"))
+#                         levels = c("1","2","3","4","5"),
+#                 labels = c("Poorest","Mid-Poor","Mid","Mid-Wealthy","Wealthiest"))
 
 surv_dat$SES <- factor(surv_dat$SES,
                         levels = c("1","2","3"),
-                        labels = c("Poorest", "Mid", "Wealthiest"))
+                        labels = c("Poorest","Mid","Wealthiest"))
 
 ## If using imputed Household ID's 
 #surv_dat$HouseholdId <- surv_dat$HouseholdId_imp
@@ -158,10 +159,6 @@ events_fname <- paste0(data_dir,"/events_ses_obs_open_",as.character(start_date)
 
 write.csv(sum_event_ses_obs,file = events_fname)
 
-### Keep required variables for analysis
-
-# surv_dat_anal <- surv_dat[,c('IIntID','HouseholdId','Year','sex','age_cat','SES','highest_edu_fact',
-#                              'urban_rural_fact','pipsa_fact','km_clinic_fact','obs_start','obs_end','ntime','sero_event')]
 
 surv_dat_anal <- surv_dat
 
@@ -227,8 +224,8 @@ surv_dat_anal_total <- unique(surv_dat_anal[c('IIntID','first_obs_start',
                                        'last_obs_end','final_sero_status','mean_SES')])
 
 surv_dat_anal_total$SES <- factor(surv_dat_anal_total$mean_SES,
-                        levels = c("1","2","3"),
-                        labels = c("Poorest", "Mid", "Wealthiest"))
+                                  levels = c("1","2","3"),
+                                  labels = c("Poorest","Mid","Wealthiest"))
 
 
 surv_dat_anal_total$ntime <- surv_dat_anal_total$last_obs_end - surv_dat_anal_total$first_obs_start
@@ -276,7 +273,7 @@ ggsave(plot_fname,p3,  width=20, height=15, units="cm")
 #### Univariable analysis 
 
 
-covariates <- c('age_cat', 'sex',  'SES', 'Highest_Education','Urban_Rural')
+covariates <- c('age_cat', 'sex',  'SES', 'Highest_Education','Urban_Rural','Km_Clinic')
 univ_formulas <- sapply(covariates,
                         function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
 
@@ -310,11 +307,12 @@ for (i in seq(1,length(covariates),1)) {
 ## Rename variables
 surv_dat_anal <- dplyr::rename(surv_dat_anal, Education = Highest_Education )
 surv_dat_anal <- dplyr::rename(surv_dat_anal, Setting = Urban_Rural)
+surv_dat_anal <- dplyr::rename(surv_dat_anal, Clinic_Distance = Km_Clinic)
 surv_dat_anal <- dplyr::rename(surv_dat_anal, Age = age_cat)
 surv_dat_anal <- dplyr::rename(surv_dat_anal, Sex = sex)
 
 cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex + Education + Setting, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
+res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex + Education + Setting + Clinic_Distance, data =  as.data.frame(surv_dat_anal),cluster=HouseholdId)
 sink(cox_fname,append=FALSE)
 summary(res.cox)
 sink(file=NULL)
@@ -397,7 +395,7 @@ test.ph
 #### Summary analysis using finalfit
 
 #covariates <- c('Age', 'Sex',  'SES', 'Education' , 'Setting','cluster(HouseholdId)')
-covariates <- c('Age', 'Sex',  'Education','cluster(HouseholdId)')
+covariates <- c('Age', 'Sex', 'SES', 'Education','Setting','Clinic_Distance','cluster(HouseholdId)')
 dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 
@@ -418,8 +416,9 @@ knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 surv_dat_anal_male <- filter(surv_dat_anal,(surv_dat_anal$Sex=="Male"))
 surv_dat_anal_female <- filter(surv_dat_anal,(surv_dat_anal$Sex=="Female"))
 
-covariates <- c( 'Age','Education','cluster(HouseholdId)')
-dependent <- "Surv(time=ntime, event=sero_event==1)"
+#covariates <- c( 'Age','Education','cluster(HouseholdId)')
+# covariates <- c('Age', 'Sex', 'SES', 'Education','Setting','Clinic_Distance','cluster(HouseholdId)')
+# dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 
 
@@ -430,6 +429,8 @@ surv_dat_anal %>%
 # rename(" " = levels) %>% 
 # rename("  " = all) -> t1
 knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+
+
 
 surv_dat_anal_male %>%
   finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,

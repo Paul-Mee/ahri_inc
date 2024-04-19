@@ -5,7 +5,8 @@ rm(list = ls())
 # Define vector of package names
 
 package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','survival',
-                   'ggsurvfit','survivalAnalysis','NCmisc','devtools')
+                   'ggsurvfit','survivalAnalysis','NCmisc','devtools','readxl',
+                   'reldist','ineq')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -208,7 +209,8 @@ sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   mutate(highest_edu_num.imp = imputeTS::na_locf(highest_edu_num)) %>% 
   mutate(urban_rural_num.imp = imputeTS::na_locf(urban_rural_num)) %>%
   mutate(km_clinic_num.imp = imputeTS::na_locf(km_clinic_num )) %>%
-  mutate(HouseholdId = imputeTS::na_locf(HouseholdId))   
+  mutate(HouseholdId = imputeTS::na_locf(HouseholdId)) %>%
+  mutate(BSIntId = imputeTS::na_locf(BSIntId)) 
 
 sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)  
   
@@ -303,23 +305,116 @@ sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(
 #                                                    'censor_date','highest_edu_imp_fact','urban_rural_imp_fact',
 #                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2')]
 
-sero_data_imput_ses.df <- sero_data_imput_ses.df[c('IIntID','HouseholdId','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date',
+sero_data_imput_ses2.df <- sero_data_imput_ses.df[c('IIntID','BSIntId','HouseholdId','Isigodi','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date',
                                                    'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
                                                    'censor_date','highest_edu_imp_fact','urban_rural_imp_fact','km_clinic_imp_fact',
-                                                   'wealth_quant_fa.imp2','wealth_quant_pca.imp2')]
+                                                   'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score')]
 
 
 
-sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Highest_Education = highest_edu_imp_fact )
-sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Urban_Rural = urban_rural_imp_fact)
-sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Km_Clinic = km_clinic_imp_fact)
-sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Wealth_Quant_FA = wealth_quant_fa.imp2)
-sero_data_imput_ses.df <- dplyr::rename(sero_data_imput_ses.df, Wealth_Quant_PCA = wealth_quant_pca.imp2)
+sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Highest_Education = highest_edu_imp_fact )
+sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Urban_Rural = urban_rural_imp_fact)
+sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Km_Clinic = km_clinic_imp_fact)
+sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_FA = wealth_quant_fa.imp2)
+sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_PCA = wealth_quant_pca.imp2)
 
-n_cohort <- dplyr::n_distinct(sero_data_imput_ses.df$IIntID)
+n_cohort <- dplyr::n_distinct(sero_data_imput_ses2.df$IIntID)
 
+
+##### Generate a value for the Gini Coefficient for each Week Block and Isigodi 
+### Count number of houses/ Bounded Structures per Isigodi 
+
+tmp_isigodi_bs <- unique(sero_data_imput_ses2.df[c('BSIntId','Isigodi')])
+count_isigodi_bs <- tmp_isigodi_bs %>% dplyr::count(Isigodi)
+
+tmp_isigodi_house <- unique(sero_data_imput_ses2.df[c('HouseholdId','Isigodi')])
+count_isigodi_house <- tmp_isigodi_bs %>% dplyr::count(Isigodi)
+
+### Range from 710 to 1 
+
+#### Merge Week Block assignments data read from Excel spreadsheet 
+
+week_block_fname <- paste0(data_dir,"/Weekblock Assignments.xlsx")
+
+### Read in Excel spreadsheet
+weekblocks.df <- read_excel(week_block_fname)
+### Merge Weekblocks to data file
+sero_data_imput_ses2.df <- merge(sero_data_imput_ses2.df,weekblocks.df,by.x='BSIntId',by.y='BoundedStructure',all.x=TRUE)
+
+### Count households and bounded structures in each week block
+tmp_weekblock_bs <- unique(sero_data_imput_ses2.df[c('BSIntId','Week')])
+count_weekblock_bs <- tmp_weekblock_bs %>% dplyr::count(Week)
+sum(count_weekblock_bs$n)
+
+### 317/6054 (approx 5%) Bounded Structures not assigned to a weekblock
+
+### Bounded Structures with no weekblock 
+bs_no_week.df <- tmp_weekblock_bs  %>% filter(is.na(Week))
+
+csv_fname <- paste0(data_dir,"/bs_no_week.csv")
+write.csv(bs_no_week.df,csv_fname,row.names = FALSE)
+
+tmp_weekblock_house <- unique(sero_data_imput_ses2.df[c('HouseholdId','Week')])
+count_weekblock_house <- tmp_weekblock_house %>% dplyr::count(Week)
+sum(count_weekblock_house$n)
+### 1796/7717 (23.2%) Households not assigned to a Weekblock
+
+#### Calculate Gini coefficient for each Week Block 
+
+### Example code for calculating Gini by group 
+### https://www.r-bloggers.com/2013/01/calculating-a-gini-coefficients-for-a-number-of-locales-at-once-in-r/ 
+
+### Graphing the data to assess inequity by weekblock
+
+### Shift pca score so that all values are postive and drop NA values from the analysis
+
+pca_data.df <- sero_data_imput_ses2.df  %>% filter(!is.na(pca_1d_score))
+min_pca <- abs(min(pca_data.df$pca_1d_score))
+pca_data.df$pca_s_pos <- pca_data.df$pca_1d_score + min_pca
+
+
+ggplot(pca_data.df,
+       aes(pca_s_pos)) +
+  stat_density(geom = "path",
+               position = "identity") +
+  facet_wrap(~ Week, ncol = 4)
+
+### Gini for each weekblock
+### gini function from reldist package
+gini_weeks <- aggregate(pca_s_pos ~ Week,
+                        data = pca_data.df,
+                        FUN = "gini")
+
+names(gini_weeks) <- c("Week", "gini")
+
+##Convert Gini to quantiles
+n_quant = 3 # Number of quantiles 
+### Range from least to most unequal
+gini_weeks$gini_quant<-  schoRsch::ntiles(gini_weeks, dv = "gini", bins=n_quant)
+
+
+
+
+## Using Gini function from ineq package
+
+# gini_weeks2 <- aggregate(pca_s_pos ~ Week,
+#                         data = pca_data.df,
+#                         FUN = "Gini")
+# 
+# names(gini_weeks2) <- c("Week", "gini")
+
+### Both give same result
+
+### Merge Gini result to main file
+
+sero_data_imput_ses2.df <- merge(sero_data_imput_ses2.df,gini_weeks,by='Week',all.x = TRUE)
+
+sero_data_imput_ses2.df$gini_quant_char <- as.character(sero_data_imput_ses2.df$gini_quant)
+
+sero_data_imput_ses2.df$gini_quant_fact  <- factor(sero_data_imput_ses2.df$gini_quant , levels = c(1,2,3),
+                                          labels = c("lowest", "mid" , "highest"))
 
 R_fname_survdat <- paste0(data_dir,"/Survdata.RDS")
 ### Saving as RDS file
-saveRDS(sero_data_imput_ses.df  , file = R_fname_survdat)
+saveRDS(sero_data_imput_ses2.df  , file = R_fname_survdat)
 
