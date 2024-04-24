@@ -26,7 +26,7 @@ sero_data_imput_ses.df <- readRDS(R_fname_survdat)
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2015-01-01")
+start_date <- as.Date("2008-01-01")
 end_date <- as.Date("2021-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
@@ -395,7 +395,7 @@ test.ph
 #### Summary analysis using finalfit
 
 #covariates <- c('Age', 'Sex',  'SES', 'Education' , 'Setting','cluster(HouseholdId)')
-covariates <- c('Age', 'Sex', 'SES', 'Education','Setting','Clinic_Distance','cluster(HouseholdId)')
+covariates <- c('Age', 'Sex', 'SES', 'Education','Setting','Clinic_Distance','gini_quant_fact','cluster(HouseholdId)')
 dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 

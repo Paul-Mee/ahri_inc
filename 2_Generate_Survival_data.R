@@ -359,55 +359,60 @@ count_weekblock_house <- tmp_weekblock_house %>% dplyr::count(Week)
 sum(count_weekblock_house$n)
 ### 1796/7717 (23.2%) Households not assigned to a Weekblock
 
-#### Calculate Gini coefficient for each Week Block 
 
-### Example code for calculating Gini by group 
-### https://www.r-bloggers.com/2013/01/calculating-a-gini-coefficients-for-a-number-of-locales-at-once-in-r/ 
+##table(sero_data_imput_ses2.df$Year,sero_data_imput_ses2.df$Week)
 
-### Graphing the data to assess inequity by weekblock
+### Filter sero_data_imput_ses2.df for years with PCA scores
 
-### Shift pca score so that all values are postive and drop NA values from the analysis
+sero_data_imput_pca.df  <- sero_data_imput_ses2.df %>% filter(!is.na(pca_1d_score))
 
-pca_data.df <- sero_data_imput_ses2.df  %>% filter(!is.na(pca_1d_score))
-min_pca <- abs(min(pca_data.df$pca_1d_score))
-pca_data.df$pca_s_pos <- pca_data.df$pca_1d_score + min_pca
-
-
-ggplot(pca_data.df,
-       aes(pca_s_pos)) +
-  stat_density(geom = "path",
-               position = "identity") +
-  facet_wrap(~ Week, ncol = 4)
-
-### Gini for each weekblock
-### gini function from reldist package
-gini_weeks <- aggregate(pca_s_pos ~ Week,
-                        data = pca_data.df,
-                        FUN = "gini")
-
-names(gini_weeks) <- c("Week", "gini")
+year_list <- sort(unique(sero_data_imput_pca.df$Year))
+year_list
 
 ##Convert Gini to quantiles
 n_quant = 3 # Number of quantiles 
-### Range from least to most unequal
-gini_weeks$gini_quant<-  schoRsch::ntiles(gini_weeks, dv = "gini", bins=n_quant)
 
+#year = 2005
 
-
-
-## Using Gini function from ineq package
-
-# gini_weeks2 <- aggregate(pca_s_pos ~ Week,
-#                         data = pca_data.df,
-#                         FUN = "Gini")
-# 
-# names(gini_weeks2) <- c("Week", "gini")
-
-### Both give same result
+#### Loop through a list of years
+for (year in year_list){
+  print(as.character(year))
+  sero_data_year.df  <- sero_data_imput_pca.df %>% filter(Year == year)
+  
+  ### Filter for none NA values and shift all PCA scores to positive values 
+  pca_data.df <- sero_data_year.df   %>% filter(!is.na(pca_1d_score))
+  min_pca <- abs(min(pca_data.df$pca_1d_score))
+  pca_data.df$pca_s_pos <- pca_data.df$pca_1d_score + min_pca
+  
+  ### Gini for each weekblock
+  ### gini function from reldist package
+  ### Example code for calculating Gini by group 
+  ### https://www.r-bloggers.com/2013/01/calculating-a-gini-coefficients-for-a-number-of-locales-at-once-in-r/ 
+  
+  gini_weeks <- aggregate(pca_s_pos ~ Week,
+                          data = pca_data.df,
+                          FUN = "gini")
+  
+  names(gini_weeks) <- c("Week", "gini")
+  
+  gini_weeks$Year <- year
+  
+  ### Convert Gini to quantiles
+  ### Range from least to most unequal
+  gini_weeks$gini_quant<-  schoRsch::ntiles(gini_weeks, dv = "gini", bins=n_quant)
+  
+  ### Append to overall dataframe      
+  if(exists("gini_weeks_all")==FALSE) {
+    gini_weeks_all <- gini_weeks
+  } else{ 
+    gini_weeks_all <-  rbind(gini_weeks_all,gini_weeks)
+  }
+  
+}
 
 ### Merge Gini result to main file
 
-sero_data_imput_ses2.df <- merge(sero_data_imput_ses2.df,gini_weeks,by='Week',all.x = TRUE)
+sero_data_imput_ses2.df <- merge(sero_data_imput_ses2.df,gini_weeks_all,by=c('Week','Year'),all.x = TRUE)
 
 sero_data_imput_ses2.df$gini_quant_char <- as.character(sero_data_imput_ses2.df$gini_quant)
 
