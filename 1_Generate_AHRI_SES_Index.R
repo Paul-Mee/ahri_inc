@@ -5,53 +5,52 @@
 ### Variables are only included which have been consistently collected over time
 ### in order to allow comparison of changes over time
 ### Interpolation is used to substitute for missing data 
+### Two methods are use to generate the summary Wealth Index , Factor Analysis and Principal Components  Analysis 
 ### 
 
 # Clear any existing data from the data set
 rm(list = ls())
 # Increase R studio columns viewed
 rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
+# Ensure only the SA CRAN repository is accessed 
+options(repos = getOption("repos")["CRAN"])
 
 # Set file paths
 ## AHRI data
-data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
+data_dir <- 'E:/PaulMee/HDSS'
+output_dir <- 'E:/PaulMee/Outputs'
 
 
 # Define vector of package names
 
 package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','data.table',
-                   'imputeTS','DescTools','PerformanceAnalytics','qgraph','corrplot','Compind',
-                   'ggplot2')
+                   'imputeTS','DescTools','PerformanceAnalytics','qgraph','corrplot',
+                   'ggplot2','Compind')
 
 
-# This code installs all the other required packages if they are not currently installed and load all the libraries
+# This code installs all the other required packages if they are not currently installed and loads 
+# all the libraries
 
 pacman::p_load(char=package_names)
 
 
-# Define Parameters for PCA calculation 
+# Define Parameters 
 
-n_fact = 3 # Number of PCA factors
-n_quant = 5 # Number of quantiles
+n_quant = 5 # Number of quantiles for SES index 
 
 ### Loading Household Asset data 
 
 stata_data_file <- '/RD06-99 ACDIS HSE-H All.dta'
 ACDIS_hh <- haven::read_dta(paste0(data_dir,stata_data_file))
 
-tmp <-  dplyr::filter(ACDIS_hh, HHIntId == 44836 )
-### Extract year from visit date 
-
 ACDIS_hh$Visit_Year <- lubridate::year(ACDIS_hh$VisitDate)
 
 ### Move Visit data column
 ACDIS_hh  <- ACDIS_hh  %>% relocate(Visit_Year, .after=VisitDate)
 
-
 ### Recoding and normalising variables 
 ### For each variable recode such that 1 represents the most wealthy and 0 least wealthy 
-### these definitions are subjective and could be changed based on local feedback
-
+### these definitions are somewhat subjective 
 
 ### Water Source 
 
@@ -86,7 +85,6 @@ ACDIS_hh$water_norm <- (max(ACDIS_hh$water,na.rm = TRUE) - ACDIS_hh$water)/(max(
 ACDIS_hh$toilet <- NA
 
 ## Update codes based on wealth ranking for toilets 
-## May need to update definitions 
 
 ACDIS_hh$toilet[as.integer(ACDIS_hh$ToiletType)== 1 ] <- 1  # Flush Toilet
 ACDIS_hh$toilet[as.integer(ACDIS_hh$ToiletType)== 10 ] <- 1  # Flush Toilet
@@ -366,6 +364,8 @@ item_list <- c( "BED",
 
 ## check data 
 
+### Create tab.df which shows the number of time each variable was collected in each year 
+
 tab.df <- as.data.frame(unique(ACDIS_hh$Visit_Year))
 names(tab.df)[1] <- "Visit_Year"
 
@@ -375,11 +375,11 @@ for (var_nam in item_list) {
   dat.df <- ACDIS_hh %>% 
     group_by(Visit_Year) %>% 
     summarise(x = sum(.data[[var_nam]]))
-    names(dat.df)[2] <- var_nam
-    tab.df <- merge(tab.df,dat.df,by='Visit_Year')
+  names(dat.df)[2] <- var_nam
+  tab.df <- merge(tab.df,dat.df,by='Visit_Year')
 }
 
-write.csv2(tab.df,paste0(data_dir,'/asset_item.csv'))
+write.csv2(tab.df,paste0(output_dir,'/asset_item.csv'))
 
 
 
@@ -426,31 +426,31 @@ asset_list <- c("HHIntId",
                 "VCR",
                 "WBR",
                 "HWG",
-                "WSM"
-                # "EHT",
-                # "PHT",
-                # "SHF",
-                # "CPT",
-                # "VAN",
-                # "LOR",
-                # "TFV",
-                # "FRN",
-                # "JWT",
-                # "ACN",
-                # "DIS",
-                # "MIC",
-                # "PTV",
-                # "SEC",
-                # "SWP",
-                # "TUM",
-                # "VAC"
-                )
+                "WSM",
+                "EHT",
+                "PHT",
+                "SHF",
+                "CPT",
+                "VAN",
+                "LOR",
+                "TFV",
+                "FRN",
+                "JWT",
+                "ACN",
+                "DIS",
+                "MIC",
+                "PTV",
+                "SEC",
+                "SWP",
+                "TUM",
+                "VAC"
+)
 
 ### Create new dataframe with just required data 
 
 ass_data <- ACDIS_hh[,asset_list]
 
-### Rename variables based on name
+### Rename variables 
 ass_data <- dplyr::rename(ass_data, 'WAT' = 'water_norm')
 ass_data <- dplyr::rename(ass_data, 'TOI' = 'toilet_norm')
 ass_data <- dplyr::rename(ass_data, 'ENE' = 'energy_norm')
@@ -470,192 +470,196 @@ ass_data <- ass_data %>%
 ass_data <- ass_data %>% filter(rank==1)
 
 
-## Select data for 2003 to 2021 and 2023
+## Select range of years for data
 
-ass_data_select <- ass_data %>% filter(Visit_Year >= 2003 & Visit_Year != 2022)
-
-#ass_data_select <- ass_data %>% filter(Visit_Year == 2012)
+ass_data_select <- ass_data %>% filter(Visit_Year >= 2003 & Visit_Year <= 2023)
+#ass_data_select <- ass_data %>% filter(Visit_Year >= 2005 & Visit_Year <= 2006)
 
 ### Vector of unique visit years
 
 year_list <- sort(unique(ass_data_select$Visit_Year))
 year_list
 
-year = 2007
-
 #### Loop through a list of years
 for (year in year_list){
-    print(as.character(year))
-    
-    ass_data_year <- ass_data_select %>% filter(Visit_Year == year)
-    ##Count NA values for each asset variable
-    
-    print(paste0("Total number of rows = ",as.character(nrow(ass_data_year)) ))
-    
-    print(paste0("Total number of rows with missing data = ",as.character(sum(!complete.cases(ass_data_year))) ))
-    
-    colnames(ass_data_select)
-    
-    for (var in colnames(ass_data_select)){
-      print(paste0("Total number of rows with missing data for ",var," = ",as.character(sum(is.na(ass_data_year[var]))) ))
-    }
-    ### Drop any rows with NA values as this will led to problems with PCA calculation 
+  print(as.character(year))
   
-    print(paste0("Rows before dropping NA values = ",as.character(nrow(ass_data_year))))
-    ass_data_tmp <-  na.omit(ass_data_year)
-    print(paste0("Rows after dropping NA values = ",as.character(nrow(ass_data_tmp))))
-    
-    n_zero <- nrow(ass_data_tmp[rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE) == 0,])
-    print(paste0("Total number of rows with all asset values equal to zero =  ",as.character(n_zero)))
-    
-    ### Drop rows with Sum = 0 for all asset values (i.e. all 0 ) 
-    ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE)
-    ass_data_tmp <-  dplyr::filter(ass_data_tmp, ses_sum > 0 )
-    print(paste0("Rows after dropping all zero values = ",as.character(nrow(ass_data_tmp))))
-    
-    ass_data_tmp<- as.data.frame(ass_data_tmp)
-    rownames(ass_data_tmp) <- ass_data_tmp[,1]
-    ass_data_tmp <- ass_data_tmp[5:(ncol(ass_data_tmp)-2)]
-    
-    print(paste0("Number of columns of asset data before dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp))))
-    ass_data_tmp <- ass_data_tmp[, colSums(ass_data_tmp != 0, na.rm = TRUE) > 0]
-    print(paste0("Number of columns of asset data after dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp))))
-    
-    #ass_data_tmp <- cbind(ass_data_tmp_head,ass_data_tmp_tail)
-    
-    #head(ass_data_tmp)
-    
-    ##Correlation Plot
-    # PerformanceAnalytics::chart.Correlation(ass_data_tmp , method = c("spearman")
-    #                   ,histogram=FALSE, pch=20, cex=2.5,sym_cex = 0.001)
-    ### Check correlation
-    #corr.matrix1 <- cor(ass_data_tmp, method = "spearman",  use = "pairwise.complete.obs")
-    
-        ## Another approach to better visualize correlation between indicators is to 
-    ## represent them through a network with the ggpraph package.
-    
-    #this.indicators.label <- rownames(corr.matrix1)
-    
-    ### for output
-    # plot_name <- paste0('/correlation_network-',as.character(year))
-    # qgraph::qgraph(cor(ass_data_tmp),
-    #        # shape = "circle",
-    #        # posCol = "darkgreen",
-    #        # negCol = "darkred",
-    #        # threshold = "bonferroni", #The threshold argument can be used to remove edges that are not significant.
-    #        # sampleSize = nrow(scores.this.norm),
-    #        # graph = "glasso",
-    #        esize = 5, ## Size of node
-    #        vsize = 5,
-    #        vTrans = 600,
-    #        posCol = "#003399", ## Color positive correlation Dark powder blue
-    #        negCol = "#FF9933", ## Color negative correlation Deep Saffron
-    #        alpha = 0.05,
-    #        cut = 0.4, ## cut off value for correlation
-    #        maximum = 1, ## cut off value for correlation
-    #        palette = 'pastel', # adjusting colors
-    #        borders = TRUE,
-    #        details = FALSE,
-    #        layout = "spring",
-    #        nodeNames = this.indicators.label ,
-    #        labels = rownames(corr.matrix1),
-    #        legend.cex = 0.1,
-    #        label.cex = 0.7,
-    #        label.scale = TRUE,
-    #        title = "Correlations Network",
-    #        line = -2,
-    #        cex.main = 1,
-    #        filetype = "png",
-    #        filename = paste0(data_dir,plot_name))
+  ass_data_year <- ass_data_select %>% filter(Visit_Year == year)
+  ##Count NA values for each asset variable
+  
+  print(paste0("Total number of rows = ",as.character(nrow(ass_data_year)) ))
+  
+  print(paste0("Total number of rows with missing data = ",as.character(sum(!complete.cases(ass_data_year))) ))
+  
 
-    ### http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials
-            
-    ### Factor Analysis Composite Scales - user guide
-    ### https://www-users.york.ac.uk/~mb55/msc/clinimet/week7/scales.pdf
-            
-    ### PCA analysis 
-        
-    res.pca <- FactoMineR::PCA(ass_data_tmp, scale.unit = TRUE, ncp = 5, graph = FALSE)
-    pca_score <- as.data.frame(res.pca$ind$coord[,1])
-    
-    pca_score$HHIntId <- row.names(pca_score)
-    #### Add 1st dimension of PCA analysis to ass_data_tmp dataframe
-    names(pca_score)[1] <- "pca_1d_score"
-    
-    #### Factor Analysis - Composite Index
-    
-    #### Composite Index using Factor Analysis - Methods
-    ### https://humanitarian-user-group.github.io/post/compositeindicator/ 
-    ### Or this
-    ### https://bluefoxr.github.io/COINrDoc/
-    
-    CI_Factor_estimated <-  Compind::ci_factor(ass_data_tmp,
-                                               indic_col = (1:ncol(ass_data_tmp)),
-                                               method = "CH",  
-                                               dim=5)
-    ## Overall Score 
-    fa_score <- data.frame( CI_Factor_estimated$ci_factor_est)
-    fa_score$HHIntId <- row.names(fa_score)
-    names(fa_score)[1] <- "fa_score"
-    
-    ## Merge Results 
-    ass_data_year <- merge(ass_data_year,pca_score,by='HHIntId')
-    ass_data_year <- merge(ass_data_year,fa_score,by='HHIntId')
-    
-    # Calculate Wealth quantiles 1 = poorest to n = richest
-    ass_data_year$wealth_quantile_pca <-  schoRsch::ntiles(ass_data_year, dv = "pca_1d_score", bins=n_quant)
-    ass_data_year$wealth_quantile_fa <-  schoRsch::ntiles(ass_data_year, dv = "fa_score", bins=n_quant)
-    
-    ## basic Scatter Plot
-    # basic scatterplot
-    ggplot(ass_data_year, aes(x=pca_1d_score, y=fa_score)) + 
-      geom_point()
-    
-    ### Analysing PCA output
-    # 
-    # 
-    # ### Percentage of variance explained by each dimension     
-    # eig.val <- factoextra::get_eigenvalue(res.pca)
-    # eig.val
-    # 
-    # ### Scree Plot
-    # factoextra::fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 25))
-    # 
-    # ### Graphs of Variables
-    # var <- factoextra::get_pca_var(res.pca)
-    # var
-    # 
-    # head(var$contrib)
-    # 
-    # 
-    # corrplot(var$contrib, is.corr=FALSE, 
-    #          cl.pos='r',cl.align.text='l',cl.ratio=0.5)    
-    #     
-    # head(var$cos2, 4)
-    
-    ### http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials
-    
-    ### Factor Analysis Composite Scales - user guide
-    ### https://www-users.york.ac.uk/~mb55/msc/clinimet/week7/scales.pdf
-    ## Keep HHId, Year , prn_score , wealth_quantile
-        
-    ass_data_ses_year <- ass_data_year[,c('HHIntId','Visit_Year','pca_1d_score','wealth_quantile_pca', 'fa_score','wealth_quantile_fa' )]
-        
-        ### Append to overall dataframe      
-        if(exists("ass_ses_all")==FALSE) {
-          ass_ses_all <- ass_data_ses_year
-        } else{ 
-          ass_ses_all <-  rbind(ass_ses_all,ass_data_ses_year)
-        }
+  for (var in colnames(ass_data_select)){
+    print(paste0("Total number of rows with missing data for ",var," = ",as.character(sum(is.na(ass_data_year[var]))) ))
+  }
+  ### Drop any rows with NA values as this will led to problems with PCA calculation 
+  
+  print(paste0("Rows before dropping NA values = ",as.character(nrow(ass_data_year))))
+  ass_data_tmp <-  na.omit(ass_data_year)
+  print(paste0("Rows after dropping NA values = ",as.character(nrow(ass_data_tmp))))
+  
+  n_zero <- nrow(ass_data_tmp[rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE) == 0,])
+  print(paste0("Total number of rows with all asset values equal to zero =  ",as.character(n_zero)))
+  
+  ### Drop rows with Sum = 0 for all asset values (i.e. all 0 ) 
+  ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE)
+  ass_data_tmp <-  dplyr::filter(ass_data_tmp, ses_sum > 0 )
+  print(paste0("Rows after dropping all zero values = ",as.character(nrow(ass_data_tmp))))
+  
+  ass_data_tmp<- as.data.frame(ass_data_tmp)
+  rownames(ass_data_tmp) <- ass_data_tmp[,1]
+  ass_data_tmp <- ass_data_tmp[5:(ncol(ass_data_tmp)-2)]
+  
+  print(paste0("Number of columns of asset data before dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp))))
+  ass_data_tmp <- ass_data_tmp[, colSums(ass_data_tmp != 0, na.rm = TRUE) > 0]
+  print(paste0("Number of columns of asset data after dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp))))
+  
+  ### This section of code is used for investigating the correlation of variables and can be commented out 
+  ### if not needed
+  
+  #ass_data_tmp <- cbind(ass_data_tmp_head,ass_data_tmp_tail)
+  
+  #head(ass_data_tmp)
+  
+  ##Correlation Plot
+  # PerformanceAnalytics::chart.Correlation(ass_data_tmp , method = c("spearman")
+  #                   ,histogram=FALSE, pch=20, cex=2.5,sym_cex = 0.001)
+  ### Check correlation
+  #corr.matrix1 <- cor(ass_data_tmp, method = "spearman",  use = "pairwise.complete.obs")
+  
+  ## Another approach to better visualize correlation between indicators is to 
+  ## represent them through a network with the ggpraph package.
+  
+  #this.indicators.label <- rownames(corr.matrix1)
+  
+  ### for output
+  # plot_name <- paste0('/correlation_network-',as.character(year))
+  # qgraph::qgraph(cor(ass_data_tmp),
+  #        # shape = "circle",
+  #        # posCol = "darkgreen",
+  #        # negCol = "darkred",
+  #        # threshold = "bonferroni", #The threshold argument can be used to remove edges that are not significant.
+  #        # sampleSize = nrow(scores.this.norm),
+  #        # graph = "glasso",
+  #        esize = 5, ## Size of node
+  #        vsize = 5,
+  #        vTrans = 600,
+  #        posCol = "#003399", ## Color positive correlation Dark powder blue
+  #        negCol = "#FF9933", ## Color negative correlation Deep Saffron
+  #        alpha = 0.05,
+  #        cut = 0.4, ## cut off value for correlation
+  #        maximum = 1, ## cut off value for correlation
+  #        palette = 'pastel', # adjusting colors
+  #        borders = TRUE,
+  #        details = FALSE,
+  #        layout = "spring",
+  #        nodeNames = this.indicators.label ,
+  #        labels = rownames(corr.matrix1),
+  #        legend.cex = 0.1,
+  #        label.cex = 0.7,
+  #        label.scale = TRUE,
+  #        title = "Correlations Network",
+  #        line = -2,
+  #        cex.main = 1,
+  #        filetype = "png",
+  #        filename = paste0(output_dir,plot_name))
+  
+  ### References to methods/packages used 
+  
+  ### http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials
+  
+  ### Factor Analysis Composite Scales - user guide
+  ### https://www-users.york.ac.uk/~mb55/msc/clinimet/week7/scales.pdf
+  
+  ### PCA analysis 
+  
+  res.pca <- FactoMineR::PCA(ass_data_tmp, scale.unit = TRUE, ncp = 5, graph = FALSE)
+  pca_score <- as.data.frame(res.pca$ind$coord[,1])
+  
+  pca_score$HHIntId <- row.names(pca_score)
+  #### Add 1st dimension of PCA analysis to ass_data_tmp dataframe
+  names(pca_score)[1] <- "pca_1d_score"
+  
+  #### Factor Analysis - Composite Index
+  
+  #### Composite Index using Factor Analysis - Methods
+  ### https://humanitarian-user-group.github.io/post/compositeindicator/ 
+  ### Or this
+  ### https://bluefoxr.github.io/COINrDoc/
+  
+  CI_Factor_estimated <-  Compind::ci_factor(ass_data_tmp,
+                                             indic_col = (1:ncol(ass_data_tmp)),
+                                             method = "CH",
+                                             dim=3)
+  ## Overall Score 
+  fa_score <- data.frame( CI_Factor_estimated$ci_factor_est)
+  fa_score$HHIntId <- row.names(fa_score)
+  names(fa_score)[1] <- "fa_score"
+  
+  ## Merge Results 
+  ass_data_year <- merge(ass_data_year,pca_score,by='HHIntId')
+  ass_data_year <- merge(ass_data_year,fa_score,by='HHIntId')
+  
+  # Calculate Wealth quantiles 1 = poorest to n = richest
+  ass_data_year$wealth_quantile_pca <-  schoRsch::ntiles(ass_data_year, dv = "pca_1d_score", bins=n_quant)
+  ass_data_year$wealth_quantile_fa <-  schoRsch::ntiles(ass_data_year, dv = "fa_score", bins=n_quant)
+  
+  ### this code is used to check the results of the PCA and FA scores
+  ## basic Scatter Plot
+  # basic scatterplot
+  # ggplot(ass_data_year, aes(x=pca_1d_score, y=fa_score)) +
+  #   geom_point()
+  
+  ### Analysing PCA output
+  # 
+  # 
+  # ### Percentage of variance explained by each dimension     
+  # eig.val <- factoextra::get_eigenvalue(res.pca)
+  # eig.val
+  # 
+  # ### Scree Plot
+  # factoextra::fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 25))
+  # 
+  # ### Graphs of Variables
+  # var <- factoextra::get_pca_var(res.pca)
+  # var
+  # 
+  # head(var$contrib)
+  # 
+  # 
+  # corrplot(var$contrib, is.corr=FALSE, 
+  #          cl.pos='r',cl.align.text='l',cl.ratio=0.5)    
+  #     
+  # head(var$cos2, 4)
+  
+  ### http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials
+  
+  ### Factor Analysis Composite Scales - user guide
+  ### https://www-users.york.ac.uk/~mb55/msc/clinimet/week7/scales.pdf
+  ## Keep HHId, Year , prn_score , wealth_quantile
+  
+  ass_data_ses_year <- ass_data_year[,c('HHIntId','Visit_Year','pca_1d_score','wealth_quantile_pca', 'fa_score','wealth_quantile_fa' )]
+  
+  #ass_data_ses_year <- ass_data_year[,c('HHIntId','Visit_Year','pca_1d_score','wealth_quantile_pca' )]
+  
+  
+  ### Append to overall dataframe      
+  if(exists("ass_ses_all")==FALSE) {
+    ass_ses_all <- ass_data_ses_year
+  } else{ 
+    ass_ses_all <-  rbind(ass_ses_all,ass_data_ses_year)
+  }
 }
 
 
-
-  
 ### Interpolation for missing data
 ### Interpolate to get a value for each household for each year
 ### use locf - carry forward last observation
 ### If value missing in a particular year use most recent value
+### This method will create interpolated values after the  first non-missing value
 
 ### Get a df with Each HHId and each Visit Year
 
@@ -680,12 +684,7 @@ summary_dat <- ass_ses_full %>% group_by(Visit_Year) %>% summarise(NA_sum = sum(
 # ### Percentage NA values by year
 summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_tot*100
 #
-print(n=21,summary_dat)
-#
-
-
-#
-### locf - where data missing carry over last observation
+#print(n=21,summary_dat)
 #
 
 ass_ses_full_imp  <- ass_ses_full %>%
@@ -697,39 +696,20 @@ ass_ses_full_imp  <- ass_ses_full %>%
 ass_ses_full_imp  <- ungroup(ass_ses_full_imp )
 
 
-#### Now use the surveillance episodes dataset to get a 
-#### quantile value for each individual in each year they were
-#### included in the surveillance by i) linking the household quantile data 
-#### to the individual surveillance and ii) interpolating for missing data using 
-#### locf as before 
+#### Load data-set with a row for each year an individual was resident in a household
+#### To create this file need to run "O_Household_Residence_Episodes.R" once
 
-stata_data_file <- "/SurveillanceEpisodesHIV.dta"
-ACDIS_epi <- haven::read_dta(paste0(data_dir,stata_data_file))
-# 
-### Select Visit_Year as mid point in episode from epi file 
-### Merge on HHIntId = HouseholdId and Visit_Year = Mid_Visit_year
-# 
-ACDIS_epi$Start_Year <- lubridate::year(ACDIS_epi$StartDate)
-ACDIS_epi$End_Year <- lubridate::year(ACDIS_epi$EndDate)
-# 
-ACDIS_epi$Mid_Year <- as.integer((ACDIS_epi$Start_Year + ACDIS_epi$End_Year)/2)
-# 
-# 
-## Ranking by Individual Id , Mid_year
-ACDIS_epi <- ACDIS_epi %>%
-  group_by(IIntId,Mid_Year) %>%
-  dplyr::mutate(rank = order(order(StartDate, decreasing=FALSE)))
-# 
-# 
-# ### If multiple visits in a year just use first one
-ACDIS_epi <- ACDIS_epi %>% filter(rank==1)
+epi_data_file <- "/House_Res_Episodes.RDS"
+ACDIS_epi_full <- readRDS(paste0(output_dir,epi_data_file))
+
+
 # 
 # ## NB this includes years in which no household asset data was collected - hence NA values below are not really missing data 
 # 
 # ### Merge with asset data 
 # 
-ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full_imp,by.x = (c("HouseholdId","Mid_Year")),
-                                              by.y= (c("HHIntId","Visit_Year")),all.x=TRUE)
+ACDIS_epi_quant <- merge(ACDIS_epi_full,ass_ses_full_imp,by.x = (c("HouseholdId","Res_Year")),
+                         by.y= (c("HHIntId","Visit_Year")),all.x=TRUE)
 # 
 # # ### Count number of NA values by year 
 # summary_dat <- ACDIS_epi_quant %>% group_by(Mid_Year) %>% summarise(NA_sum = sum(is.na(wealth_quantile)),n_ind = n())
@@ -740,24 +720,12 @@ ACDIS_epi_quant <- merge(ACDIS_epi,ass_ses_full_imp,by.x = (c("HouseholdId","Mid
 # 
 # 
 # 
-# 
-# ### Imputation for Individuals where there are any imputed wealth quantile variables available
-# 
-# ACDIS_epi_quant_imp  <- ACDIS_epi_quant %>%
-#   group_by(IIntId) %>%
-#   arrange(Mid_Year) %>%
-#   mutate(allNA = all(is.na(wealth_quant.imp1)),
-#          wealth_quant.imp2 = if(!allNA[1]) imputeTS::na_locf(wealth_quant.imp1) else wealth_quant.imp1)
-# 
-# ACDIS_epi_quant_imp <- ungroup(ACDIS_epi_quant_imp)
-# 
-# ### NB this doesn't take account of moves between households of differing SES
-# 
-# 
-# ACDIS_Ind_SES <- ACDIS_epi_quant_imp[,c('Mid_Year','IIntId','HouseholdId','prn_score','wealth_quantile','wealth_quant.imp1','wealth_quant.imp2')]
 
-ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Mid_Year','IIntId','HouseholdId','pca_1d_score','wealth_quantile_pca',
-                                         'wealth_quant_pca.imp1','wealth_quantile_fa','wealth_quant_fa.imp1')]
+#### Keep Required variables 
+
+ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Res_Year','IIntId','HouseholdId','pca_1d_score','wealth_quantile_pca',
+                                    'wealth_quant_pca.imp1','fa_score','wealth_quantile_fa','wealth_quant_fa.imp1')]
+
 
 #### Loading Education data 
 ### Loading Individual level data for Education variables 
@@ -796,34 +764,25 @@ ACDIS_edu$highest_edu[ACDIS_edu$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- 
 ### What to do when highest education reported decreases over time ? 
 
 ACDIS_edu$highest_edu_fact <- factor(ACDIS_edu$highest_edu,
-                                        levels = c("None","Lower Primary","Higher Primary",
-                                                   "Lower Secondary","Higher Secondary","Tertiary"))
+                                     levels = c("None","Lower Primary","Higher Primary",
+                                                "Lower Secondary","Higher Secondary","Tertiary"))
 
 
 #Merge with SES data
 ACDIS_edu <- ACDIS_edu[c('IIntId', 'Visit_Year', 'highest_edu_fact')]
 
-ACDIS_Ind_SES_edu <- merge(ACDIS_Ind_SES,ACDIS_edu,by.x = c('IIntId','Mid_Year'),by.y = c('IIntId','Visit_Year'),all.x = TRUE)
+ACDIS_Ind_SES_edu <- merge(ACDIS_Ind_SES,ACDIS_edu,by.x = c('IIntId','Res_Year'),by.y = c('IIntId','Visit_Year'),all.x = TRUE)
 
 # Loading Bonded Structure Data
 
 bsi_fname="/RD01-03 ACDIS BoundedStructures.dta"
 ACDIS_bsi<- haven::read_dta(paste0(data_dir,bsi_fname))
 
+# ggplot(ACDIS_bsi, aes(x=KmToNearestClinic)) +
+#   geom_histogram()
+
 ### Keep required variables 
-### ddi-documentation-english-1088.pdf 
-## ISURBANORRURAL
-# 1 Default 
-# 2 Peri-Urban 
-# 3 Rural 
-# 4 Urban 
-# 99 Unknown 
 
-## PIPSA
-# 1 Southern PIPSA 
-# 2 Northern PIPSA 
-
-## KMTONEARESTCLINIC
 
 ACDIS_bsi_tmp <- ACDIS_bsi[c('BSIntId','Isigodi','IsUrbanOrRural','PIPSA','KmToNearestClinic')]
 
@@ -850,7 +809,14 @@ ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 4 & ACDIS_bsi_tmp
 ACDIS_bsi_tmp$km_clinic_cat[(ACDIS_bsi_tmp$KmToNearestClinic > 6 )] <- ">6"
 
 ACDIS_bsi_tmp$km_clinic_fact <- factor(ACDIS_bsi_tmp$km_clinic_cat,
-                                       levels = c("0-2",">2 -4",">4-6",">6"))
+                                       levels = c("0-2",">2-4",">4-6",">6"))
+
+# ggplot(ACDIS_bsi, aes(x=KmToNearestClinic)) +
+#   geom_histogram(binwidth = 0.2)
+# 
+# ggplot(ACDIS_bsi_tmp, aes(x=km_clinic_fact)) +
+#   geom_histogram(stat = "count")
+
 
 ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','Isigodi','urban_rural_fact','pipsa_fact','km_clinic_fact')]
 
@@ -868,6 +834,6 @@ ACDIS_Ind_SES_edu_BS_full <- merge(ACDIS_Ind_SES_edu_BS,ACDIS_bsi_tmp2,by=c('BSI
 
 ### Save as RDS file 
 
-R_fname_edu_bs <- paste0(data_dir,"/Ind_Edu_SES_BS_year.RDS")
+R_fname_edu_bs <- paste0(output_dir,"/Ind_Edu_SES_BS_year.RDS")
 ### Saving as RDS file
 saveRDS(ACDIS_Ind_SES_edu_BS_full  , file = R_fname_edu_bs)

@@ -1,6 +1,6 @@
 ###
 ### This code takes the AHRI Surveillance Episodes HIV dataset and creates a row for each year an individual is
-### resdident in a household
+### resident in a household . It is run as a stand-alone piece of code due to the time take to execute
 ### 
 
 # Clear any existing data from the data set
@@ -10,14 +10,13 @@ rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
 
 # Set file paths
 ## AHRI data
-data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
+data_dir <- 'E:/PaulMee/HDSS'
+output_dir <- 'E:/PaulMee/Outputs'
 
 
 # Define vector of package names
 
-package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','data.table',
-                   'imputeTS','DescTools','PerformanceAnalytics','qgraph','corrplot','Compind',
-                   'ggplot2')
+package_names <- c('haven','dplyr','lubridate')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -43,10 +42,10 @@ ACDIS_epi <- ACDIS_epi %>% filter(Resident==1)
 #
 #### Filter first 1000 Id's  to test 
 #
-#ACDIS_epi <- ACDIS_epi %>% filter(IIntId < 10000)
+#ACDIS_epi <- ACDIS_epi %>% filter(IIntId < 1000)
 #
 #### Create a Year row for each year that the individual is resident in the household
-#### This will be a slow step for full data (> 1 hour to run ?)
+#### This will be a slow step for full data (> 1 hour to run )
 #
 ACDIS_epi_full <- ACDIS_epi %>% 
   rowwise() %>% 
@@ -74,6 +73,6 @@ ACDIS_epi_full <- ACDIS_epi_full[,c('IIntId','HouseholdId','Res_Year')]
 
 ### Save as RDS file 
 
-R_fname_house_res <- paste0(data_dir,"/House_Res_Episodes.RDS")
+R_fname_house_res <- paste0(output_dir,"/House_Res_Episodes.RDS")
 ### Saving as RDS file
 saveRDS(ACDIS_epi_full , file = R_fname_house_res)

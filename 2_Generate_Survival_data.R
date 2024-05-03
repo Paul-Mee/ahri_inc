@@ -15,9 +15,11 @@ pacman::p_load(char=package_names)
 
 # Set file paths
 ## AHRI data
-data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
+data_dir <- 'E:/PaulMee/HDSS'
 ## Local copy of AHRI R code
-code_dir <- 'C:/github/ahri_inc/avdm_ahri_code/R/'
+code_dir <- 'E:/PaulMee/R/ahri_code/'
+## Any outputs from the analyses
+output_dir <- 'E:/PaulMee/Outputs'
 
 ## This is a download of the files from Alain Vandermael's AHRI R library 
 ## The files with suffix 'PM' have been updated to reflect changes in data file names 
@@ -52,6 +54,11 @@ wgh_fname="RD03-99 ACDIS WGH ALL.dta"
 mgh_fname="RD04-99 ACDIS MGH ALL.dta" 
 bsi_fname="RD01-03 ACDIS BoundedStructures.dta"
 epi_fname="SurveillanceEpisodesHIV.dta"
+hiv_rda_fname = "ACDIS_HIV_All.Rda"
+epi_rda_fname = "SurveillanceEpisodes.Rda"
+wgh_rda_fname = "ACDIS_WGH_ALL.Rda"
+mgh_rda_fname = "ACDIS_MGH_ALL.Rda"
+bsc_rda_fname = "ACDIS_BoundedStructures.Rda"
 
 
 getFiles <- setFiles(folder=data_dir,
@@ -59,8 +66,13 @@ getFiles <- setFiles(folder=data_dir,
                      epifile=epi_fname,
                      wghfile=wgh_fname, 
                      mghfile=mgh_fname, 
-                     bsifile=bsi_fname)
-getFiles()[1:5]
+                     bsifile=bsi_fname,
+                     hiv_rda=hiv_rda_fname,
+                     epi_rda=epi_rda_fname,
+                     wgh_rda=wgh_rda_fname,
+                     mgh_rda=mgh_rda_fname,
+                     bsc_rda=bsc_rda_fname)
+getFiles()[1:10]
 
 #Set Args 
 if(gender=="all") {
@@ -82,8 +94,14 @@ if(gender=="all") {
                   imputeMethod=imputeRandomPoint, nSim=sim_num)
 }      
 
+
+
+
 ### Load HIV surveillance data 
-### All data is in Southern PIPSA area 
+hiv <- readHIVData()
+### Get Episodes- Reads the surveillance episodes file and writes an rda file
+epi <- readEpisodes()
+ 
 
 hiv <- setHIV(Args)
 
@@ -145,7 +163,7 @@ sero_data_imput.df <- ungroup(sero_data_imput.df)
 sero_data_imput.df$censor_date <- NA
 
 sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
-                        ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
+                                         ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
 
 sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_date), origin = "1970-01-01" )
 ### testing random sero date
@@ -157,12 +175,11 @@ sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_d
 # n_cohort <- dplyr::n_distinct(sero_data_imput.df$IIntID)
 
 ### Read saved RDS file with SES quantiles
-R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_BS_year.RDS") ### SES quantiles calculated within each year 
+R_fname_SES_edu <- paste0(output_dir,"/Ind_Edu_SES_BS_year.RDS") ### SES quantiles calculated within each year 
 #R_fname_SES_edu <- paste0(data_dir,"/Ind_Edu_SES_BS_combined.RDS") ### SES quantiles calculated across all years
 Vis_SES <- readRDS(R_fname_SES_edu)
 
-# ggplot(Vis_SES, aes(x=km_clinic_fact)) +
-#   geom_histogram(stat = "count")
+
 
 ### Merge SES data 
 sero_data_imput_ses.df  <- merge(sero_data_imput.df ,Vis_SES,by.x=c('IIntID','Year'),by.y=c('IIntId','Res_Year'),all.x=TRUE)
@@ -173,8 +190,6 @@ sero_data_imput_ses.df  <- merge(sero_data_imput.df ,Vis_SES,by.x=c('IIntID','Ye
 # summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_ind*100
 # # 
 # print(n=25,summary_dat)
-
-### Impute covariate data for missing episodes
 
 #### Remove individuals where all SES values are NA
 sero_data_imput_ses.df <- sero_data_imput_ses.df %>%
@@ -197,9 +212,7 @@ sero_data_imput_ses.df$urban_rural_num <- as.numeric(sero_data_imput_ses.df$urba
 ### Numeric code for distance to clinic
 sero_data_imput_ses.df$km_clinic_num <- as.numeric(sero_data_imput_ses.df$km_clinic_fact)
 
-##  If household missing place in most recent previous house
-
-## Impute for missing covariates using locf
+##  If household missing place in most recent previous house and Impute for missing covariates using locf
 
 sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   group_by(IIntID) %>%
@@ -213,7 +226,7 @@ sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   mutate(BSIntId = imputeTS::na_locf(BSIntId)) 
 
 sero_data_imput_ses.df <- ungroup(sero_data_imput_ses.df)  
-  
+
 ### Convert education and urban - rural and km_clinic  back to Factors
 
 sero_data_imput_ses.df$highest_edu_imp_fact <- NA
@@ -226,8 +239,8 @@ sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_n
 sero_data_imput_ses.df$highest_edu_imp_fact[sero_data_imput_ses.df$highest_edu_num.imp ==6] <- "Tertiary"
 
 sero_data_imput_ses.df$highest_edu_imp_fact <- factor(sero_data_imput_ses.df$highest_edu_imp_fact,
-                                     levels = c("None","Lower Primary","Higher Primary",
-                                                "Lower Secondary","Higher Secondary","Tertiary"))
+                                                      levels = c("None","Lower Primary","Higher Primary",
+                                                                 "Lower Secondary","Higher Secondary","Tertiary"))
 
 sero_data_imput_ses.df$urban_rural_imp_fact <- NA
 
@@ -236,7 +249,7 @@ sero_data_imput_ses.df$urban_rural_imp_fact[sero_data_imput_ses.df$urban_rural_n
 sero_data_imput_ses.df$urban_rural_imp_fact[sero_data_imput_ses.df$urban_rural_num.imp == 3 ]  <- "Peri-Urban"
 
 sero_data_imput_ses.df$urban_rural_imp_fact <- factor(sero_data_imput_ses.df$urban_rural_imp_fact,
-                                         levels = c("Rural","Urban","Peri-Urban"))
+                                                      levels = c("Rural","Urban","Peri-Urban"))
 
 sero_data_imput_ses.df$km_clinic_imp_fact <- NA
 
@@ -246,7 +259,7 @@ sero_data_imput_ses.df$km_clinic_imp_fact[sero_data_imput_ses.df$km_clinic_num.i
 sero_data_imput_ses.df$km_clinic_imp_fact[sero_data_imput_ses.df$km_clinic_num.imp == 4 ]  <- ">6"
 
 sero_data_imput_ses.df$km_clinic_imp_fact <- factor(sero_data_imput_ses.df$km_clinic_imp_fact,
-                                                      levels = c("0-2",">2-4",">4-6",">6"))
+                                                    levels = c("0-2",">2-4",">4-6",">6"))
 
 ### Count number of individuals with missing data for wealth_quant.imp2 
 
@@ -282,21 +295,21 @@ sero_data_imput_ses.df$km_clinic_imp_fact <- factor(sero_data_imput_ses.df$km_cl
 
 ### Generate categorical age group variable
 ### age_cat 15-25,25-40,40-65, >65
-        
+
 sero_data_imput_ses.df$age_cat <-  ifelse((sero_data_imput_ses.df$Age >= 15 & sero_data_imput_ses.df$Age < 25), "15-24",
-                                   ifelse((sero_data_imput_ses.df$Age >= 25 & sero_data_imput_ses.df$Age < 40), "25-39",
-                                   ifelse((sero_data_imput_ses.df$Age >= 40 & sero_data_imput_ses.df$Age < 65), "40-64",
-                                   ifelse((sero_data_imput_ses.df$Age >= 65 ), ">65",F))))
+                                          ifelse((sero_data_imput_ses.df$Age >= 25 & sero_data_imput_ses.df$Age < 40), "25-39",
+                                                 ifelse((sero_data_imput_ses.df$Age >= 40 & sero_data_imput_ses.df$Age < 65), "40-64",
+                                                        ifelse((sero_data_imput_ses.df$Age >= 65 ), ">65",F))))
 
 
- 
+
 
 sero_data_imput_ses.df$age_cat  <- factor(sero_data_imput_ses.df$age_cat , levels = c("15-24", "25-39" , "40-64",   ">65"),
-              labels = c("15-24", "25-39" , "40-64",   ">65"))
+                                          labels = c("15-24", "25-39" , "40-64",   ">65"))
 
 ### Sex as a factor 
 sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(0, 1),
-                                        labels = c("Male", "Female"))
+                                     labels = c("Male", "Female"))
 
 ### Select variables of interest
 
@@ -306,9 +319,9 @@ sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(
 #                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2')]
 
 sero_data_imput_ses2.df <- sero_data_imput_ses.df[c('IIntID','BSIntId','HouseholdId','Isigodi','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date',
-                                                   'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
-                                                   'censor_date','highest_edu_imp_fact','urban_rural_imp_fact','km_clinic_imp_fact',
-                                                   'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score')]
+                                                    'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
+                                                    'censor_date','highest_edu_imp_fact','urban_rural_imp_fact','km_clinic_imp_fact',
+                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score')]
 
 
 
@@ -321,7 +334,7 @@ sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_P
 n_cohort <- dplyr::n_distinct(sero_data_imput_ses2.df$IIntID)
 
 
-##### Generate a value for the Gini Coefficient for each Week Block and Isigodi 
+##### Generate a value for the Gini Coefficient for each Week Block 
 ### Count number of houses/ Bounded Structures per Isigodi 
 
 tmp_isigodi_bs <- unique(sero_data_imput_ses2.df[c('BSIntId','Isigodi')])
@@ -370,7 +383,7 @@ year_list <- sort(unique(sero_data_imput_pca.df$Year))
 year_list
 
 ##Convert Gini to quantiles
-n_quant = 3 # Number of quantiles 
+n_quant = 5 # Number of quantiles 
 
 #year = 2005
 
@@ -417,9 +430,8 @@ sero_data_imput_ses2.df <- merge(sero_data_imput_ses2.df,gini_weeks_all,by=c('We
 sero_data_imput_ses2.df$gini_quant_char <- as.character(sero_data_imput_ses2.df$gini_quant)
 
 sero_data_imput_ses2.df$gini_quant_fact  <- factor(sero_data_imput_ses2.df$gini_quant , levels = c(1,2,3),
-                                          labels = c("lowest", "mid" , "highest"))
+                                                   labels = c("lowest", "mid" , "highest"))
 
-R_fname_survdat <- paste0(data_dir,"/Survdata.RDS")
+R_fname_survdat <- paste0(output_dir,"/Survdata.RDS")
 ### Saving as RDS file
 saveRDS(sero_data_imput_ses2.df  , file = R_fname_survdat)
-
