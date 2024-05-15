@@ -735,7 +735,7 @@ ass_data_mca <- ass_data_mca %>% filter(rank==1)
 ## Select range of years for data
 
 first_year = 2005
-last_year = 2023axeler8_shunax
+last_year = 2023
 
 ass_data_select <- ass_data %>% filter(Visit_Year >= first_year & Visit_Year <= last_year)
 #ass_data_select <- ass_data %>% filter(Visit_Year >= 2005 & Visit_Year <= 2006)
