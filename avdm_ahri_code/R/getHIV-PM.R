@@ -34,7 +34,7 @@ readHIVData <- function(inFile=NULL,
   }
   #
   hiv <- haven::read_dta(inFile) %>% 
-    select(IIntID = .data$IIntId, 
+    dplyr::select(IIntID = .data$IIntId, 
       BSIntID = .data$ResidencyBSIntId, .data$VisitDate, 
       .data$HIVResult, Female = .data$Sex, Age = .data$AgeAtVisit,
       matches(addVars))

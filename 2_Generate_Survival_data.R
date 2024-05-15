@@ -21,13 +21,16 @@ package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','surviva
 
 pacman::p_load(char=package_names)
 
-# Set file paths
+
+
 ## AHRI data
-data_dir <- 'E:/PaulMee/HDSS'
+#data_dir <- 'E:/PaulMee/HDSS'
+data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
+#output_dir <- 'E:/PaulMee/Outputs'
+output_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
 ## Local copy of AHRI R code
-code_dir <- 'E:/PaulMee/R/ahri_code/'
-## Any outputs from the analyses
-output_dir <- 'E:/PaulMee/Outputs'
+#code_dir <- 'E:/PaulMee/R/ahri_code/'
+code_dir <- 'C:/github/ahri_inc/avdm_ahri_code/R/'
 
 ## This is a download of the files from Alain Vandermael's AHRI R library 
 ## The files with suffix 'PM' have been updated to reflect changes in data file names 
@@ -227,6 +230,7 @@ sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   arrange(Year) %>%
   mutate(wealth_quant_pca.imp2 = imputeTS::na_locf(wealth_quant_pca.imp1)) %>%
   mutate(wealth_quant_fa.imp2 = imputeTS::na_locf(wealth_quant_fa.imp1)) %>%
+  mutate(wealth_quant_mca.imp2 = imputeTS::na_locf(wealth_quant_mca.imp1)) %>%
   mutate(highest_edu_num.imp = imputeTS::na_locf(highest_edu_num)) %>% 
   mutate(urban_rural_num.imp = imputeTS::na_locf(urban_rural_num)) %>%
   mutate(km_clinic_num.imp = imputeTS::na_locf(km_clinic_num )) %>%
@@ -329,7 +333,8 @@ sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(
 sero_data_imput_ses2.df <- sero_data_imput_ses.df[c('IIntID','BSIntId','HouseholdId','Isigodi','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date',
                                                     'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
                                                     'censor_date','highest_edu_imp_fact','urban_rural_imp_fact','km_clinic_imp_fact',
-                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score')]
+                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score',
+                                                    'mca_score','wealth_quant_mca.imp2')]
 
 
 
@@ -338,12 +343,14 @@ sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Urban_Rural = 
 sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Km_Clinic = km_clinic_imp_fact)
 sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_FA = wealth_quant_fa.imp2)
 sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_PCA = wealth_quant_pca.imp2)
+sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_MCA = wealth_quant_mca.imp2)
 
 n_cohort <- dplyr::n_distinct(sero_data_imput_ses2.df$IIntID)
 
 
 ##### Generate a value for the Gini Coefficient for each Week Block 
 ### Count number of houses/ Bounded Structures per Isigodi 
+#### Using MCA derived SES scores
 
 tmp_isigodi_bs <- unique(sero_data_imput_ses2.df[c('BSIntId','Isigodi')])
 count_isigodi_bs <- tmp_isigodi_bs %>% dplyr::count(Isigodi)
@@ -383,11 +390,11 @@ sum(count_weekblock_house$n)
 
 ##table(sero_data_imput_ses2.df$Year,sero_data_imput_ses2.df$Week)
 
-### Filter sero_data_imput_ses2.df for years with PCA scores
+### Filter sero_data_imput_ses2.df for years with MCA scores
 
-sero_data_imput_pca.df  <- sero_data_imput_ses2.df %>% filter(!is.na(pca_1d_score))
+sero_data_imput_mca.df  <- sero_data_imput_ses2.df %>% filter(!is.na(mca_score))
 
-year_list <- sort(unique(sero_data_imput_pca.df$Year))
+year_list <- sort(unique(sero_data_imput_mca.df$Year))
 year_list
 
 ##Convert Gini to quantiles
@@ -398,20 +405,20 @@ n_quant = 5 # Number of quantiles
 #### Loop through a list of years
 for (year in year_list){
   print(as.character(year))
-  sero_data_year.df  <- sero_data_imput_pca.df %>% filter(Year == year)
+  sero_data_year.df  <- sero_data_imput_mca.df %>% filter(Year == year)
   
   ### Filter for none NA values and shift all PCA scores to positive values 
-  pca_data.df <- sero_data_year.df   %>% filter(!is.na(pca_1d_score))
-  min_pca <- abs(min(pca_data.df$pca_1d_score))
-  pca_data.df$pca_s_pos <- pca_data.df$pca_1d_score + min_pca
+  mca_data.df <- sero_data_year.df   %>% filter(!is.na(mca_score))
+  min_mca <- abs(min(mca_data.df$mca_score))
+  mca_data.df$mca_s_pos <- mca_data.df$mca_score + min_mca
   
   ### Gini for each weekblock
   ### gini function from reldist package
   ### Example code for calculating Gini by group 
   ### https://www.r-bloggers.com/2013/01/calculating-a-gini-coefficients-for-a-number-of-locales-at-once-in-r/ 
   
-  gini_weeks <- aggregate(pca_s_pos ~ Week,
-                          data = pca_data.df,
+  gini_weeks <- aggregate(mca_s_pos ~ Week,
+                          data = mca_data.df,
                           FUN = "gini")
   
   names(gini_weeks) <- c("Week", "gini")
