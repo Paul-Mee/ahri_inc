@@ -1,3 +1,11 @@
+####
+#### This code merges the previously created sociodemogrpahic data with the HIV episode data
+#### Local copies of Alain Vandermaels R scripts are used to take account of minor changes in variable names 
+#### LOCF imputation is used for HIV episodes where there is no corresponding SES data after the merge
+#### Gini coefficients which measure the wealth inequality within each WeekBlock are also generated 
+####
+
+
 # Clear any existing data from the data set
 rm(list = ls())
 

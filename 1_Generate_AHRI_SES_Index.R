@@ -5,7 +5,8 @@
 ### Variables are only included which have been consistently collected over time
 ### in order to allow comparison of changes over time
 ### Interpolation is used to substitute for missing data 
-### Two methods are use to generate the summary Wealth Index , Factor Analysis and Principal Components  Analysis 
+### Three methods are use to generate the summary Wealth Index , Factor Analysis, Multiple Correspondence Analysis
+### and Principal Components  Analysis 
 ### 
 
 # Clear any existing data from the data set
@@ -17,15 +18,16 @@ options(repos = getOption("repos")["CRAN"])
 
 # Set file paths
 ## AHRI data
-data_dir <- 'E:/PaulMee/HDSS'
-output_dir <- 'E:/PaulMee/Outputs'
-
+#data_dir <- 'E:/PaulMee/HDSS'
+data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
+#output_dir <- 'E:/PaulMee/Outputs'
+output_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/2023'
 
 # Define vector of package names
 
 package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','data.table',
                    'imputeTS','DescTools','PerformanceAnalytics','qgraph','corrplot',
-                   'ggplot2','Compind')
+                   'ggplot2','Compind','lmreg')
 
 
 # This code installs all the other required packages if they are not currently installed and loads 
@@ -33,10 +35,45 @@ package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','da
 
 pacman::p_load(char=package_names)
 
+### Define Function - Cat_Bin - Converts a categorical variable to a series of binary variables each 
+### representing a level of the categorical variable as a yes/no
+### Input variables - Df name , index_vars (vector of the index column names) , 
+### categorical value column name , max non-missing value 
+
+
+# df = 'ACDIS_hh'
+# index_vars = c('HHIntId','Visit_Year')
+# col_name = 'DrinkWaterSource'
+# max_val=16 
+
+cat_bin <- function(df,index_vars, col_name,max_val){
+  ## Header 
+  head_cols <- append(index_vars,col_name)
+  df <- get(df)
+  head.df <- df[head_cols]
+  ## Create numeric vector of column
+  var_vec <- as.numeric(unlist(df[col_name]))
+  ## substitute "9999" for all values over the maximum
+  var_vec <- replace(var_vec, var_vec > max_val, 9999)
+  ## Create a set of binary variables (1 or 0) for each level of categorical variable names Vn to Vm
+  bins <- as.data.frame(binaries(var_vec))
+  ## convert column names to numeric 
+  names(bins) <- sub(pattern = "^v.","", colnames(bins))
+  ## Sort in numerical order
+  bins <- bins[, order(as.numeric(names(bins)))]
+  ## Append original variable name 
+  sub_name=paste0("mv_",col_name,".")
+  names(bins) <- sub(pattern = "^",sub_name, colnames(bins))
+  ## Drop columns representing unknown values 
+  bins <- bins %>% dplyr::select(-contains("9999"))
+  new_df <- cbind(head.df,bins)
+  new_df
+}
+
 
 # Define Parameters 
 
-n_quant = 5 # Number of quantiles for SES index 
+n_quant = 5 # Number of quantiles for SES indices 
 
 ### Loading Household Asset data 
 
@@ -47,6 +84,10 @@ ACDIS_hh$Visit_Year <- lubridate::year(ACDIS_hh$VisitDate)
 
 ### Move Visit data column
 ACDIS_hh  <- ACDIS_hh  %>% relocate(Visit_Year, .after=VisitDate)
+
+### AC_1.df used for MCA calculations
+AC_1.df <- ACDIS_hh
+
 
 ### Recoding and normalising variables 
 ### For each variable recode such that 1 represents the most wealthy and 0 least wealthy 
@@ -79,6 +120,14 @@ table(ACDIS_hh$Visit_Year,ACDIS_hh$water,useNA = "ifany")
 
 ACDIS_hh$water_norm <- (max(ACDIS_hh$water,na.rm = TRUE) - ACDIS_hh$water)/(max(ACDIS_hh$water,na.rm = TRUE) - min(ACDIS_hh$water,na.rm = TRUE))
 
+### Create binary variables for MCA
+tmp.df <- cat_bin(df = 'ACDIS_hh', 
+                  index_vars = c('HHIntId','Visit_Year'), 
+                  col_name = 'DrinkWaterSource',
+                  max_val=16 )
+
+AC_1.df <- merge(AC_1.df,tmp.df,by=(c('HHIntId','Visit_Year')))
+
 
 ### Toilet Types
 
@@ -106,6 +155,12 @@ table(ACDIS_hh$Visit_Year,ACDIS_hh$toilet,useNA = "ifany")
 
 ACDIS_hh$toilet_norm <- (max(ACDIS_hh$toilet,na.rm = TRUE) - ACDIS_hh$toilet)/(max(ACDIS_hh$toilet,na.rm = TRUE) - min(ACDIS_hh$toilet,na.rm = TRUE))
 
+### Create binary variables for MCA
+tmp.df <- cat_bin(df = 'ACDIS_hh', 
+                  index_vars = c('HHIntId','Visit_Year'), 
+                  col_name = 'ToiletType',
+                  max_val=14 )
+AC_1.df <- merge(AC_1.df,tmp.df,by=(c('HHIntId','Visit_Year')))
 
 # Household electricity Supply
 
@@ -136,6 +191,13 @@ table(ACDIS_hh$Visit_Year,ACDIS_hh$energy,useNA = "ifany")
 ACDIS_hh$energy_norm <- (max(ACDIS_hh$energy,na.rm = TRUE) - ACDIS_hh$energy)/(max(ACDIS_hh$energy,na.rm = TRUE) - min(ACDIS_hh$energy,na.rm = TRUE))
 table(ACDIS_hh$energy_norm)
 
+### Create binary variables for MCA
+tmp.df <- cat_bin(df = 'ACDIS_hh', 
+                  index_vars = c('HHIntId','Visit_Year'),
+                  col_name = 'MainCookingFuel',
+                  max_val=7 )
+
+AC_1.df <- merge(AC_1.df,tmp.df,by=(c('HHIntId','Visit_Year')))
 
 ### Wall materials ### Only used in last 2 or 3 years 
 
@@ -178,6 +240,14 @@ table(ACDIS_hh$Visit_Year,ACDIS_hh$wall_mat,useNA = "ifany")
 ACDIS_hh$wall_mat_norm <- (max(ACDIS_hh$wall_mat,na.rm = TRUE) - ACDIS_hh$wall_mat)/(max(ACDIS_hh$wall_mat,na.rm = TRUE) - min(ACDIS_hh$wall_mat,na.rm = TRUE))
 table(ACDIS_hh$wall_mat_norm)
 
+### Create binary variables for MCA
+tmp.df <- cat_bin(df = 'ACDIS_hh', 
+                  index_vars = c('HHIntId','Visit_Year'),
+                  col_name = 'WallMaterial',
+                  max_val=28 )
+
+AC_1.df <- merge(AC_1.df,tmp.df,by=(c('HHIntId','Visit_Year')))
+
 ### Roof materials
 
 ACDIS_hh$roof_mat <-  NA
@@ -218,6 +288,121 @@ table(ACDIS_hh$Visit_Year,ACDIS_hh$roof_mat,useNA = "ifany")
 
 ACDIS_hh$roof_mat_norm <- (max(ACDIS_hh$roof_mat,na.rm = TRUE) - ACDIS_hh$roof_mat)/(max(ACDIS_hh$roof_mat,na.rm = TRUE) - min(ACDIS_hh$roof_mat,na.rm = TRUE))
 table(ACDIS_hh$roof_mat_norm)
+
+### Create binary variables for MCA
+tmp.df <- cat_bin(df = 'ACDIS_hh', 
+                  index_vars = c('HHIntId','Visit_Year'),
+                  col_name = 'RoofMaterial',
+                  max_val=28 )
+
+AC_1.df <- merge(AC_1.df,tmp.df,by=(c('HHIntId','Visit_Year')))
+
+#### Variables already coded as binary 
+
+# Household electricity Supply
+
+AC_1.df$electric <-  NA
+AC_1.df$electric[as.integer(AC_1.df$IsElectrified)== 1] <- 1  # Yes
+AC_1.df$electric[as.integer(AC_1.df$IsElectrified)== 2] <- 0  # No
+
+## Other Variables All coded 1 - Yes and 0 - No
+## Convert 9's unknown to NA
+# V78 BED Doe HH have ... Bed
+AC_1.df$BED[as.integer(AC_1.df$BED)== 9] <- NA
+# V79 BIC Doe HH have ... Bicycle
+AC_1.df$BIC[as.integer(AC_1.df$BIC)== 9] <- NA
+# V80 BLM Doe HH have ... Blockmaker
+AC_1.df$BLM[as.integer(AC_1.df$BLM)== 9] <- NA
+# V81 CAR Doe HH have ... Car
+AC_1.df$CAR[as.integer(AC_1.df$CAR)== 9] <- NA
+# V82 CBE Doe HH have ... Car battery
+AC_1.df$CBE[as.integer(AC_1.df$CBE)== 9] <- NA
+# V83 CTL Doe HH have ... Cattle
+AC_1.df$CTL[as.integer(AC_1.df$CTL)== 9] <- NA
+# V84 ECO Doe HH have ... Electric cooker with oven
+AC_1.df$ECO[as.integer(AC_1.df$ECO)== 9] <- NA
+# V85 EHP Doe HH have ... Electric hotplate
+AC_1.df$EHP[as.integer(AC_1.df$EHP)== 9] <- NA
+# V86 EKT Doe HH have ... Electric kettle
+AC_1.df$EKT[as.integer(AC_1.df$EKT)== 9] <- NA
+# V87 FRG Doe HH have ... Fridge
+AC_1.df$FRG[as.integer(AC_1.df$FRG)== 9] <- NA
+# V88 GCK Doe HH have ... Gas cooker
+AC_1.df$GCK[as.integer(AC_1.df$GCK)== 9] <- NA
+# V89 HSF Doe HH have ... Hoe/Spade/Fork
+AC_1.df$HSF[as.integer(AC_1.df$HSF)== 9] <- NA
+# V90 KLT Doe HH have ... Kombi/Lorry/Tractor
+AC_1.df$KLT[as.integer(AC_1.df$KLT)== 9] <- NA
+# V91 KTS Doe HH have ... Kitchen sink
+AC_1.df$KTS[as.integer(AC_1.df$KTS)== 9] <- NA
+# V92 MCS Doe HH have ... Motorcycle
+AC_1.df$MCS[as.integer(AC_1.df$MCS)== 9] <- NA
+# V93 OLS Doe HH have ... Other livestock (i.e. not cattle)
+AC_1.df$OLS[as.integer(AC_1.df$OLS)== 9] <- NA
+# V94 PMC Doe HH have ... Primus cooker
+AC_1.df$PMC[as.integer(AC_1.df$PMC)== 9] <- NA
+# V95 RAD Doe HH have ... Radio
+AC_1.df$RAD[as.integer(AC_1.df$RAD)== 9] <- NA
+# V96 SOF Doe HH have ... Sofa
+AC_1.df$SOF[as.integer(AC_1.df$SOF)== 9] <- NA
+# V97 SWM Doe HH have ... Sewing machine
+AC_1.df$SWM[as.integer(AC_1.df$SWM)== 9] <- NA
+# V98 TBC Doe HH have ... Table & Chairs
+AC_1.df$TBC[as.integer(AC_1.df$TBC)== 9] <- NA
+# V99 TLL Doe HH have ... Telephone
+AC_1.df$TLL[as.integer(AC_1.df$TLL)== 9] <- NA
+# V100 TMB Doe HH have ... Cellphone
+AC_1.df$TMB[as.integer(AC_1.df$TMB)== 9] <- NA
+# V101 TVS Doe HH have ... TV
+AC_1.df$TVS[as.integer(AC_1.df$TVS)== 9] <- NA
+# V102 VCR Doe HH have ... Video
+AC_1.df$VCR[as.integer(AC_1.df$VCR)== 9] <- NA
+# V103 WBR Doe HH have ... Wheelbarrow
+AC_1.df$WBR[as.integer(AC_1.df$WBR)== 9] <- NA
+# V104 HWG Doe HH have ... hot water geyser
+AC_1.df$HWG[as.integer(AC_1.df$HWG)== 9] <- NA
+# V105 WSM Doe HH have ... Washing machine
+AC_1.df$WSM[as.integer(AC_1.df$WSM)== 9] <- NA
+# V106 EHT Doe HH have ... Electric heater
+AC_1.df$EHT[as.integer(AC_1.df$EHT)== 9] <- NA
+# V107 PHT Doe HH have ... Paraffin heater
+AC_1.df$PHT[as.integer(AC_1.df$PHT)== 9] <- NA
+# V108 SHF Doe HH have ... Stereo or hi-fi
+AC_1.df$SHF[as.integer(AC_1.df$SHF)== 9] <- NA
+# V109 CPT Doe HH have ... Computer or laptop
+AC_1.df$CPT[as.integer(AC_1.df$CPT)== 9] <- NA
+# V110 VAN Doe HH have ... Combi van or laptop
+AC_1.df$VAN[as.integer(AC_1.df$VAN)== 9] <- NA
+# V111 LOR Doe HH have ... Lorry or transport
+AC_1.df$LOR[as.integer(AC_1.df$LOR)== 9] <- NA
+# V112 TFV Doe HH have ... Tractor or farm vehicle
+AC_1.df$TFV[as.integer(AC_1.df$TFV)== 9] <- NA
+# V113 FRN Doe HH have ... Furnishings
+AC_1.df$FRN[as.integer(AC_1.df$FRN)== 9] <- NA
+# V114 JWT Doe HH have ... Jewellery and watches
+AC_1.df$JWT[as.integer(AC_1.df$JWT)== 9] <- NA
+# V115 ACN Doe HH have ... Air conditioner
+AC_1.df$ACN[as.integer(AC_1.df$ACN)== 9] <- NA
+# V116 DIS Doe HH have ... Dish washing machine
+AC_1.df$DIS[as.integer(AC_1.df$DIS)== 9] <- NA
+# V117 MIC Doe HH have ... Microwave Oven
+AC_1.df$MIC[as.integer(AC_1.df$MIC)== 9] <- NA
+# V118 PTV Doe HH have ... Pay TV Subscription
+AC_1.df$PTV[as.integer(AC_1.df$PTV)== 9] <- NA
+# V119 SEC Doe HH have ... Home security service
+AC_1.df$SEC[as.integer(AC_1.df$SEC)== 9] <- NA
+# V120 SWP Doe HH have ... Swimming pool
+AC_1.df$SWP[as.integer(AC_1.df$SWP)== 9] <- NA
+# V121 TUM Doe HH have ... Tumble dryer
+AC_1.df$TUM[as.integer(AC_1.df$TUM)== 9] <- NA
+# V122 VAC Doe HH have ... Vacuum cleaner/ floor polisher
+AC_1.df$VAC[as.integer(AC_1.df$VAC)== 9] <- NA
+
+### Drop ".x" from column names
+names(AC_1.df) <- sub(pattern = ".x$","", colnames(AC_1.df))
+
+### Drop columns with ".y" in name 
+AC_1.df <- AC_1.df %>% dplyr::select(-contains(".y"))
 
 
 ## Other Variables All coded 1 - Yes and 0 - No
@@ -364,7 +549,7 @@ item_list <- c( "BED",
 
 ## check data 
 
-### Create tab.df which shows the number of time each variable was collected in each year 
+### Create tab.df which shows the number of times each variable was collected in each year 
 
 tab.df <- as.data.frame(unique(ACDIS_hh$Visit_Year))
 names(tab.df)[1] <- "Visit_Year"
@@ -446,9 +631,68 @@ asset_list <- c("HHIntId",
                 "VAC"
 )
 
+mca_col_list <- c("HHIntId",
+              "BSIntId",
+              "VisitDate",
+              "Visit_Year",
+              "mv_DrinkWaterSource",
+              "mv_ToiletType",
+              "mv_MainCookingFuel",
+              # "mv_RoofMaterial",
+              # "mv_WallMaterial",
+              "electric",
+              "BED",
+              "BIC",
+              "BLM",
+              "CAR",
+              "CBE",
+              "CTL",
+              "ECO",
+              "EHP",
+              "EKT",
+              "FRG",
+              "GCK",
+              "HSF",
+              "KLT",
+              "KTS",
+              "MCS",
+              "OLS",
+              "PMC",
+              "RAD",
+              "SOF",
+              "SWM",
+              "TBC",
+              "TLL",
+              "TMB",
+              "TVS",
+              "VCR",
+              "WBR",
+              "HWG",
+              "WSM"
+              # "EHT",
+              # "PHT",
+              # "SHF",
+              # "CPT",
+              # "VAN",
+              # "LOR",
+              # "TFV",
+              # "FRN",
+              # "JWT",
+              # "ACN",
+              # "DIS",
+              # "MIC",
+              # "PTV",
+              # "SEC",
+              # "SWP",
+              # "TUM",
+              # "VAC"
+)
 ### Create new dataframe with just required data 
 
 ass_data <- ACDIS_hh[,asset_list]
+
+ass_data_mca <- AC_1.df[,grep(paste(mca_col_list , collapse = "|"), x=names(AC_1.df))]
+
 
 ### Rename variables 
 ass_data <- dplyr::rename(ass_data, 'WAT' = 'water_norm')
@@ -456,6 +700,11 @@ ass_data <- dplyr::rename(ass_data, 'TOI' = 'toilet_norm')
 ass_data <- dplyr::rename(ass_data, 'ENE' = 'energy_norm')
 ass_data <- dplyr::rename(ass_data, 'ELC' = 'electric')
 
+### Rename variables 
+ass_data_mca <- dplyr::rename(ass_data_mca, 'ELC' = 'electric')
+
+
+## PCA/FA unique visits
 ### Count number of visits per year per household
 
 # ranking by HHID and Visit Date 
@@ -469,19 +718,39 @@ ass_data <- ass_data %>%
 ### If two visits in a year just use first 
 ass_data <- ass_data %>% filter(rank==1)
 
+## MCA unique visits 
+### Count number of visits per year per household
+
+# ranking by HHID and Visit Date 
+
+## Ranking by Individual Id , Year, year_diff
+ass_data_mca <- ass_data_mca %>%
+  group_by(HHIntId,Visit_Year) %>%
+  dplyr::mutate(rank = order(order(VisitDate, decreasing=FALSE)))
+
+
+### If two visits in a year just use first 
+ass_data_mca <- ass_data_mca %>% filter(rank==1)
 
 ## Select range of years for data
 
-ass_data_select <- ass_data %>% filter(Visit_Year >= 2003 & Visit_Year <= 2023)
+first_year = 2005
+last_year = 2006
+
+ass_data_select <- ass_data %>% filter(Visit_Year >= first_year & Visit_Year <= last_year)
 #ass_data_select <- ass_data %>% filter(Visit_Year >= 2005 & Visit_Year <= 2006)
+ass_data_select_mca <- ass_data_mca %>% filter(Visit_Year >= first_year & Visit_Year <= last_year)
 
 ### Vector of unique visit years
 
 year_list <- sort(unique(ass_data_select$Visit_Year))
 year_list
 
-#### Loop through a list of years
+year = 2005
+
+#### Loop through a list of years for PCA/FA calculation 
 for (year in year_list){
+  print("FA/PCA calculation")
   print(as.character(year))
   
   ass_data_year <- ass_data_select %>% filter(Visit_Year == year)
@@ -589,12 +858,13 @@ for (year in year_list){
   ### https://humanitarian-user-group.github.io/post/compositeindicator/ 
   ### Or this
   ### https://bluefoxr.github.io/COINrDoc/
-  
+  ## Fixes a grpahics error in ci_factor
+  par(mar=c(1,1,1,1))
   CI_Factor_estimated <-  Compind::ci_factor(ass_data_tmp,
                                              indic_col = (1:ncol(ass_data_tmp)),
-                                             method = "CH",
+                                             method = "ONE",
                                              dim=3)
-  ## Overall Score 
+  ## Overall Score
   fa_score <- data.frame( CI_Factor_estimated$ci_factor_est)
   fa_score$HHIntId <- row.names(fa_score)
   names(fa_score)[1] <- "fa_score"
@@ -654,6 +924,109 @@ for (year in year_list){
   }
 }
 
+#### Loop through a list of years
+for (year in year_list){
+  print("MCA calculation")
+  print(as.character(year))
+  
+  ass_data_year_mca <- ass_data_select_mca %>% filter(Visit_Year == year)
+  
+  ### Drop any rows with NA values as this will led to problems with MCA calculation 
+  
+  print(paste0("Rows before dropping NA values = ",as.character(nrow(ass_data_year_mca))))
+  ass_data_tmp <-  na.omit(ass_data_year_mca)
+  print(paste0("Rows after dropping NA values = ",as.character(nrow(ass_data_tmp))))
+  
+  n_zero <- nrow(ass_data_tmp[rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE) == 0,])
+  print(paste0("Total number of rows with all asset values equal to zero =  ",as.character(n_zero)))
+  
+  ### Drop rows with Sum = 0 for all asset values (i.e. all 0 ) 
+  ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 1))], na.rm=TRUE)
+  ass_data_tmp <-  dplyr::filter(ass_data_tmp, ses_sum > 0 )
+  print(paste0("Rows after dropping all zero values = ",as.character(nrow(ass_data_tmp))))
+  
+  ass_data_tmp_df <- as.data.frame(ass_data_tmp)
+  #rownames(ass_data_tmp_df) <- ass_data_tmp_df$HHIntId
+  
+  ### Keep first 4 columns then drop columns if all values for SES variables are 0 
+  
+  
+  ass_data_tmp_head <- ass_data_tmp_df[c(1:4)]
+  ass_data_tmp_tail <- ass_data_tmp_df[5:(ncol(ass_data_tmp_df) - 2)]
+  
+  print(paste0("Number of columns of asset data before dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp_tail))))
+  
+  ass_data_tmp_tail <- ass_data_tmp_tail[, colSums(ass_data_tmp_tail) > 0]
+  
+  print(paste0("Number of columns of asset data after dropping columns with all values as 0 = ",as.character(ncol(ass_data_tmp_tail))))
+  
+  ass_data_tmp2 <- cbind(ass_data_tmp_head,ass_data_tmp_tail)
+  
+  ### Convert all columns to factors
+  
+  ass_data_tmp_tail_fact <-data.frame(lapply(ass_data_tmp_tail,factor))
+  
+ 
+  ### MCA alternative approaches 
+  
+  ### Run MCA analysis for each year 
+  ## MCA based on this example 
+  ## http://sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/114-mca-multiple-correspondence-analysis-in-r-essentials
+  
+  ### Possible useful paper
+  ### https://www.scirp.org/journal/paperinformation?paperid=103350
+  
+  ### MCA for asset scores- Traissac and Prevel
+  ### https://academic.oup.com/ije/article/41/4/1207/690856?login=false 
+  
+  ### https://personal.utdallas.edu/~herve/Abdi-MCA2007-pretty.pdf 
+  
+  ### Tutorial and R Cookbook for MCA analysis 
+  ### https://vgonzenbach.github.io/multivariate-cookbook/multiple-correspondence-analysis.html#row-factor-scores-1
+  ### https://github.com/vgonzenbach/multivariate-cookbook/blob/master/03-MCA.Rmd 
+  
+  res.mca <- FactoMineR::MCA(ass_data_tmp_tail_fact, graph = FALSE)
+ 
+  ## The function get_mca_ind() [in factoextra] is used to extract the results for individuals. 
+  ## This function returns a list containing the coordinates, the cos2 and the contributions of individuals:
+  ## Assumption that the original row order is maintained
+  
+  ind <- factoextra::get_mca_ind(res.mca)
+  HH_coord <- as.data.frame(ind$coord)
+  
+  ### Using coord values (factor scores for the 1st component)
+  ass_data_tmp2$mca_score <- HH_coord[,1]
+  ### Generate Wealth Quintiles
+  ass_data_tmp2$wealth_quantile_mca <-  schoRsch::ntiles(ass_data_tmp2, dv = "mca_score", bins=n_quant)
+  # 
+  # ## Keep HHId, Year , mca_score , wealth_quantile_mca
+  # 
+  ass_data_ses_year <- ass_data_tmp2[,c('HHIntId','Visit_Year','mca_score','wealth_quantile_mca')]
+  # 
+  ### Append to overall dataframe      
+  if(exists("ass_ses_all_mca")==FALSE) {
+    ass_ses_all_mca <- ass_data_ses_year
+  } else{
+    ass_ses_all_mca <-  rbind(ass_ses_all_mca,ass_data_ses_year)
+  }
+}
+
+## Merge MCA data to PCA/FA data 
+
+ass_ses_all_pcmc <- merge(ass_ses_all,ass_ses_all_mca,by=c('HHIntId','Visit_Year'))
+
+
+
+ggplot(data=ass_ses_all_pcmc, aes(x=pca_1d_score, y=mca_score)) + 
+  geom_point()
+
+rsq <- function (x,y) cor(x, y) ^ 2
+x=ass_ses_all_pcmc$pca_1d_score
+y=ass_ses_all_pcmc$mca_score
+
+rsq_val <- rsq(x,y)
+
+print( paste0("R-squared value = ",as.character(rsq_val)))
 
 ### Interpolation for missing data
 ### Interpolate to get a value for each household for each year
@@ -663,7 +1036,7 @@ for (year in year_list){
 
 ### Get a df with Each HHId and each Visit Year
 
-all_HH.df <- as.data.frame(unique(ass_ses_all$HHIntId))
+all_HH.df <- as.data.frame(unique(ass_ses_all_pcmc$HHIntId))
 ## Merge with list of all years from first to last year
 min_year <- min(ass_ses_all$Visit_Year)
 max_year <- max(ass_ses_all$Visit_Year)
@@ -676,7 +1049,7 @@ names(HH_years.df)[1] <- "Visit_Year"
 names(HH_years.df)[2] <- "HHIntId"
 
 # ### Merge this with ass_data_ses
-ass_ses_full <- merge(HH_years.df,ass_ses_all,by=c('Visit_Year','HHIntId'),all.x=TRUE)
+ass_ses_full <- merge(HH_years.df,ass_ses_all_pcmc,by=c('Visit_Year','HHIntId'),all.x=TRUE)
 #
 
 # ### Count number of NA values by year
@@ -691,7 +1064,8 @@ ass_ses_full_imp  <- ass_ses_full %>%
   group_by(HHIntId) %>%
   arrange(Visit_Year) %>%
   mutate(wealth_quant_pca.imp1 = imputeTS::na_locf(wealth_quantile_pca)) %>%
-  mutate(wealth_quant_fa.imp1 = imputeTS::na_locf(wealth_quantile_fa))
+  mutate(wealth_quant_fa.imp1 = imputeTS::na_locf(wealth_quantile_fa)) %>%
+  mutate(wealth_quant_mca.imp1 = imputeTS::na_locf(wealth_quantile_mca))
 
 ass_ses_full_imp  <- ungroup(ass_ses_full_imp )
 
@@ -724,7 +1098,8 @@ ACDIS_epi_quant <- merge(ACDIS_epi_full,ass_ses_full_imp,by.x = (c("HouseholdId"
 #### Keep Required variables 
 
 ACDIS_Ind_SES <- ACDIS_epi_quant[,c('Res_Year','IIntId','HouseholdId','pca_1d_score','wealth_quantile_pca',
-                                    'wealth_quant_pca.imp1','fa_score','wealth_quantile_fa','wealth_quant_fa.imp1')]
+                                    'wealth_quant_pca.imp1','fa_score','wealth_quantile_fa','wealth_quant_fa.imp1',
+                                    'mca_score','wealth_quantile_mca','wealth_quant_mca.imp1')]
 
 
 #### Loading Education data 
