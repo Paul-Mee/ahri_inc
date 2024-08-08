@@ -27,13 +27,18 @@ output_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_
 
 package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','data.table',
                    'imputeTS','DescTools','PerformanceAnalytics','qgraph','corrplot',
-                   'ggplot2','Compind','lmreg')
+                   'ggplot2','Compind','lmreg','factoextra','FactoMineR','knitr')
 
 
 # This code installs all the other required packages if they are not currently installed and loads 
 # all the libraries
 
 pacman::p_load(char=package_names)
+
+#### Utility to generate bibtek files to reference R packages
+knitr::write_bib(c("FactoMineR", "factoextra"), file = paste0(output_dir,"/packages.bib"))
+
+
 
 ### Define Function - Cat_Bin - Converts a categorical variable to a series of binary variables each 
 ### representing a level of the categorical variable as a yes/no
@@ -73,7 +78,7 @@ cat_bin <- function(df,index_vars, col_name,max_val){
 
 # Define Parameters 
 
-n_quant = 5 # Number of quantiles for SES indices 
+n_quant = 3 # Number of quantiles for SES indices 
 
 ### Loading Household Asset data 
 
@@ -746,7 +751,7 @@ ass_data_select_mca <- ass_data_mca %>% filter(Visit_Year >= first_year & Visit_
 year_list <- sort(unique(ass_data_select$Visit_Year))
 year_list
 
-year = 2005
+#year = 2005
 
 #### Loop through a list of years for PCA/FA calculation 
 for (year in year_list){
@@ -994,6 +999,10 @@ for (year in year_list){
   ind <- factoextra::get_mca_ind(res.mca)
   HH_coord <- as.data.frame(ind$coord)
   
+  # ### Percentage of variance explained by each dimension     
+  eig_val.mca <- factoextra::get_eigenvalue(res.mca)
+  eig_val.mca
+  
   ### Using coord values (factor scores for the 1st component)
   ass_data_tmp2$mca_score <- HH_coord[,1]
   ### Generate Wealth Quintiles
@@ -1113,6 +1122,19 @@ ACDIS_ind <- haven::read_dta(paste0(data_dir,stata_data_file))
 ACDIS_edu <- ACDIS_ind[c('IIntId', 'VisitDate', 'HighestSchoolLevel','HighestTertiaryLevel')]
 ACDIS_edu$Visit_Year <- lubridate::year(ACDIS_edu$VisitDate)
 
+### If multiple Education records in a year select the one for the first visit and if two visits 
+### on same day lowest education level
+ACDIS_edu$HS_int <- as.numeric(ACDIS_edu$HighestSchoolLevel)
+
+ACDIS_edu <- ACDIS_edu %>% dplyr::arrange(IIntId,Visit_Year,HS_int)
+
+  ACDIS_edu <- ACDIS_edu %>% 
+  dplyr::group_by(IIntId,Visit_Year) %>% 
+  dplyr::mutate(icount=row_number())
+
+ACDIS_edu <- ACDIS_edu %>% filter(icount==1)
+
+
 ### https://www.researchgate.net/publication/267391685_RACIAL_DIFFERENCES_IN_EDUCATIONAL_ATTAINMENT_IN_SOUTH_AFRICA
 
 ### Recode School (Highest School Level Variable)
@@ -1195,12 +1217,12 @@ ACDIS_bsi_tmp$km_clinic_fact <- factor(ACDIS_bsi_tmp$km_clinic_cat,
 
 ACDIS_bsi_tmp2 <- ACDIS_bsi_tmp[c('BSIntId','Isigodi','urban_rural_fact','pipsa_fact','km_clinic_fact')]
 
-### Getting mapping between HHId and BSId
+### Getting mapping between HHId and BSId and Visit Year as a household can move to a new BS Id over time 
 
-HH_BS <- unique(ACDIS_hh[c('HHIntId','BSIntId')])
+HH_BS_Year <- unique(ACDIS_hh[c('HHIntId','BSIntId','Visit_Year')])
 
 ### Merge HH_BS with ACDIS_Ind_SES_edu
-ACDIS_Ind_SES_edu_BS <- merge(ACDIS_Ind_SES_edu,HH_BS,by.x=c('HouseholdId'),  by.y = c('HHIntId') )
+ACDIS_Ind_SES_edu_BS <- merge(ACDIS_Ind_SES_edu,HH_BS_Year,by.x=c('HouseholdId','Res_Year'),  by.y = c('HHIntId','Visit_Year') )
 
 ### Merge with ACDIS_bsi_tmp2
 

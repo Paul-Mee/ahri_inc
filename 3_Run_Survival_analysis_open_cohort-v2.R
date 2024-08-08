@@ -70,10 +70,10 @@ surv_dat <- dplyr::filter(surv_dat,((surv_dat$obs_end > start_date) &
 ### seronegative at the end date 
 
 
-# surv_dat <- within(surv_dat, sero_event[(surv_dat$obs_start < end_date) & 
-#                               (surv_dat$obs_end > end_date) &
-#                               (sero_event==1) & 
-#                               (sero_date > end_date)] <- 0)
+surv_dat <- within(surv_dat, sero_event[(surv_dat$obs_start < end_date) &
+                              (surv_dat$obs_end > end_date) &
+                              (sero_event==1) &
+                              (sero_date > end_date)] <- 0)
                               
 
 ### Set end date of observation to end date if end date is between the start and end of the observation
@@ -146,17 +146,17 @@ events_fname <- paste0(data_dir,"/events_ses_obs_open_",as.character(start_date)
 
 write.csv(sum_event_ses_obs,file = events_fname)
 
+### removing duplicate rows - need to investigate where this occurs 
 
-surv_dat_anal <- surv_dat
+surv_dat_anal <- unique(surv_dat)
 
+### Checking for remaining duplicates 
 
-#### Checking for duplicates 
-
-tmp_anal <- surv_dat_anal %>% filter(sero_event==1)
-
-tmp_anal <- tmp_anal %>%
-     group_by(IIntID) %>%
-     mutate(icount=NROW())
+# tmp_anal <- surv_dat_anal %>%
+#   dplyr::group_by(Year,IIntID) %>%
+#   dplyr::mutate(icount=row_number())
+# 
+# ### No more duplicates 
 
 
 
@@ -165,28 +165,32 @@ tmp_anal <- tmp_anal %>%
 
 
 ### Select required variables 
-tab_dat <- surv_dat_anal[c('IIntID','sex','age_cat','SES','Highest_Education','Urban_Rural','Km_Clinic','ntime','final_sero_status')]
+tab_dat <- surv_dat_anal[c('IIntID','Year','sex','age_cat','SES','Highest_Education','Urban_Rural','Km_Clinic','ntime','sero_event','obs_start')]
 
-tab_dat$count <- 1
+
 
 ### Add total ntime column 
 tab_dat <- tab_dat %>% 
   group_by(IIntID) %>% 
   mutate(total_ntime = sum(ntime))
 
-### Add total individuals column 
-tab_dat <- tab_dat %>% 
-  group_by(IIntID) %>% 
-  mutate(frac_count = count/sum(count))
 
-### Add total seroconversions
-tab_dat <- tab_dat %>% 
-  group_by(IIntID) %>% 
-  mutate(frac_sero_count = final_sero_status/sum(final_sero_status))
+### Add seroconversion during follow-up column
 
-# Replace NA values  with zero
-tab_dat  <- tab_dat  %>% 
-  mutate(frac_sero_count = tidyr::replace_na(frac_sero_count, 0))
+tab_dat <- tab_dat %>% 
+  dplyr::group_by(IIntID) %>% 
+  dplyr::mutate(seroconv=max(sero_event))
+
+
+### Add count of observations by group and select 1st row (1st year of observation)
+
+tab_dat <- tab_dat %>% dplyr::arrange(Year)
+
+tab_dat <- tab_dat %>% 
+            dplyr::group_by(IIntID) %>% 
+            dplyr::mutate(icount=row_number())
+
+tab_dat <- tab_dat %>% filter(icount==1)
 
 rm(cohort_tab)
 
@@ -198,16 +202,16 @@ var_list <- c('sex','age_cat','SES','Highest_Education','Urban_Rural','Km_Clinic
 #var='sex'
 
 for (var in var_list) {
-    cat_dat <- tab_dat[c(var,'frac_count','frac_sero_count','ntime')]
+    cat_dat <- tab_dat[c(var,'icount','seroconv','total_ntime')]
     colnames(cat_dat)[1] <- "category"
     cat_dat <- aggregate(.~category, cat_dat, sum)
-    cat_dat$ntime <- cat_dat$ntime/365.25
-    cat_dat$inc_100py <- as.character(round((cat_dat$frac_sero_count/cat_dat$ntime*100),digits=2))
-    tot_count <- sum(cat_dat$frac_count)
-    cat_dat$percent_count <- cat_dat$frac_count/tot_count*100
+    cat_dat$ntime <- cat_dat$total_ntime/365.25
+    cat_dat$inc_100py <- as.character(round((cat_dat$seroconv/cat_dat$ntime*100),digits=2))
+    tot_count <- sum(cat_dat$icount)
+    cat_dat$percent_count <- cat_dat$icount/tot_count*100
     tot_ntime <- sum(cat_dat$ntime)
     cat_dat$percent_ntime <- cat_dat$ntime/tot_ntime*100
-    cat_dat$count_n_percent <- paste0(as.character(round(cat_dat$frac_count,digits=0)),
+    cat_dat$count_n_percent <- paste0(as.character(round(cat_dat$icount,digits=0)),
                                       "(",
                                       as.character(round(cat_dat$percent_count,digits=1)),
                                       ")")
@@ -230,11 +234,10 @@ for (var in var_list) {
     
 }
 
-cohort_tab$n_ind <- round(cohort_tab$frac_count,digits = 0)
-cohort_tab$n_sero <- round(cohort_tab$frac_sero_count,digits = 0)
+
 cohort_tab$ntime <- round(cohort_tab$ntime,digits = 0)
 
-cohort_tab <- cohort_tab[c('var_name','category','n_ind','count_n_percent','n_sero','ntime','ntime_percent','inc_100py')]
+cohort_tab <- cohort_tab[c('var_name','category','icount','count_n_percent','seroconv','ntime','ntime_percent','inc_100py')]
 
 ### Write as a csv file
 cohort_fname <- paste0(data_dir,"/cohort_summary_",as.character(start_date),"_",as.character(end_date),".csv")
@@ -245,7 +248,7 @@ write.csv(cohort_tab,file = cohort_fname)
 
 
 
-### Sero Events allowing for time varying covariates - analyses withini each episode
+### Sero Events allowing for time varying covariates - analyses within each episode
 
 
 
@@ -275,26 +278,30 @@ p2
 
 ### Log-rank test 
 
-surv_diff <- survdiff(Surv(time=ntime, event=sero_event==1) ~ sex, data=surv_dat_anal,id=IIntID)
+surv_diff <- survdiff(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat_anal)
 surv_diff
 
-sum(tab_dat$frac_sero_count)
+
 
 
 plot_fname <- paste0(data_dir,"/km_all_open_",as.character(start_date),"_",as.character(end_date),".png")
 ggsave(plot_fname,p2,  width=20, height=15, units="cm")
 
 
+### New version where each individual has one row and we use starting SES 
 
+### Calculate starting SES value by individual
 
+surv_dat_anal <- surv_dat_anal %>% arrange(obs_start)
 
-### New version where each individual has one row and we use average SES 
+surv_dat_anal <- surv_dat_anal  %>% 
+                  group_by(IIntID) %>% 
+                  mutate(SES_start = SES[1])
 
-### Calculate mean SES value
 ### Final status
-surv_dat_anal <- surv_dat_anal %>%
-  group_by(IIntID) %>%
-  dplyr::mutate(mean_SES = round((mean(Wealth_Quant_PCA))))
+# surv_dat_anal <- surv_dat_anal %>%
+#   group_by(IIntID) %>%
+#   dplyr::mutate(mean_SES = round((mean(Wealth_Quant_PCA))))
 
 ### First obs_start
 surv_dat_anal <- surv_dat_anal %>%
@@ -310,11 +317,9 @@ surv_dat_anal <- ungroup(surv_dat_anal)
 
 
 surv_dat_anal_total <- unique(surv_dat_anal[c('IIntID','first_obs_start',
-                                       'last_obs_end','final_sero_status','mean_SES')])
+                                       'last_obs_end','final_sero_status','SES_start')])
 
-surv_dat_anal_total$SES <- factor(surv_dat_anal_total$mean_SES,
-                                  levels = c("1","2","3"),
-                                  labels = c("Poorest","Mid","Wealthiest"))
+surv_dat_anal_total$SES <- surv_dat_anal_total$SES_start
 
 
 surv_dat_anal_total$ntime <- surv_dat_anal_total$last_obs_end - surv_dat_anal_total$first_obs_start
@@ -322,7 +327,7 @@ surv_dat_anal_total$ntime <- surv_dat_anal_total$last_obs_end - surv_dat_anal_to
 ### maximum ntime
 max_ntime = as.integer(max(surv_dat_anal_total$ntime))
 
-### Sero Events by average SES group 
+### Sero Events by starting SES group 
 
 plot_title <- paste0("Kaplan-Meier plot  \n 
 Probability of seroconversion from  ",lubridate::year(start_date),
@@ -334,7 +339,7 @@ p3 <-  survfit(Surv(time=ntime, event=final_sero_status==1) ~ SES, data=surv_dat
   labs(
     x = "Days to serconversion",
     y = "Survival Probability",
-    title = "",
+    title = plot_title,
     colour = "SES"
   )  +
   scale_color_manual(values = c('red', 'blue','green'),
@@ -350,7 +355,7 @@ p3 <-  survfit(Surv(time=ntime, event=final_sero_status==1) ~ SES, data=surv_dat
 p3
 
 
-plot_fname <- paste0(data_dir,"/km_total_open_",as.character(start_date),"_",as.character(end_date),".png")
+plot_fname <- paste0(data_dir,"/km_start_open_",as.character(start_date),"_",as.character(end_date),".png")
 ggsave(plot_fname,p3,  width=20, height=15, units="cm")
 
 

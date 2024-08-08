@@ -106,8 +106,6 @@ if(gender=="all") {
 }      
 
 
-
-
 ### Load HIV surveillance data 
 hiv <- readHIVData()
 ### Get Episodes- Reads the surveillance episodes file and writes an rda file
@@ -169,14 +167,9 @@ sero_data_imput.df <- sero_data_imput.df %>%
 
 sero_data_imput.df <- ungroup(sero_data_imput.df)
 
-# right censor the data at the latest HIV-negative date (if uninfected) or at the imputed seroconversion  date (if infected)
 
-sero_data_imput.df$censor_date <- NA
 
-sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
-                                         ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
 
-sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_date), origin = "1970-01-01" )
 ### testing random sero date
 # sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
 #                                          ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$rand_sero_date, "No"))

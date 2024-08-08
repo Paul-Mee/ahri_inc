@@ -37,7 +37,7 @@ readEpisodes <- function(
   #   message("ahri: Renaming IIntId to IndividualId")
   #   names(dat)[names(dat)=="IIntId"] <- "IndividualId"
   # }
-  dat <- select(dat,
+  dat <- dplyr::select(dat,
     IIntID=IIntId, BSIntID=LocationId, 
     Female=Sex, 
     #Age, 
@@ -118,7 +118,7 @@ setEpisodes <- function(Args=setArgs(), dat=NULL) {
 
 makePropRes <- function(Args) {
   dat <- setEpisodes(Args) 
-  ddat <- select(dat, IIntID, Year,
+  ddat <- dplyr::select(dat, IIntID, Year,
     Resident, ExpDays) 
   ddat <- distinct(ddat, IIntID, Year)
   gdat <- filter(dat, Resident==1)
@@ -127,7 +127,7 @@ makePropRes <- function(Args) {
   adat <- left_join(ddat, gdat, by=c("IIntID", "Year"))
   adat$DaysIn[is.na(adat$DaysIn)] <- 0
   adat <- mutate(adat, PropRes=round(DaysIn/366, 3)) %>% 
-    select(IIntID, Year, PropRes)
+    dplyr::select(IIntID, Year, PropRes)
   # adat <- filter(adat, .adata$PropRes>=Prop)
   adat
 }

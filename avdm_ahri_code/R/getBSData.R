@@ -45,7 +45,7 @@ getBSData <- function(inFile = NULL) {
 dropTasPData <- function(dat, bsdat = NULL) {
   if (is.null(bsdat)) {
     check_getFiles()
-    bsdat <- getBSData() %>% select(.data$BSIntID, .data$PIPSA)
+    bsdat <- getBSData() %>% dplyr::select(.data$BSIntID, .data$PIPSA)
   }
   dat <- left_join(dat, bsdat, by="BSIntID")
   dat <- filter(dat, .data$PIPSA %in% c("Southern PIPSA", NA)) 
