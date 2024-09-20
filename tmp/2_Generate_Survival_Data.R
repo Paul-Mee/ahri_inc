@@ -1,11 +1,3 @@
-####
-#### This code merges the previously created sociodemogrpahic data with the HIV episode data
-#### Local copies of Alain Vandermaels R scripts are used to take account of minor changes in variable names 
-#### LOCF imputation is used for HIV episodes where there is no corresponding SES data after the merge
-#### Gini coefficients which measure the wealth inequality within each WeekBlock are also generated 
-####
-
-
 # Clear any existing data from the data set
 rm(list = ls())
 
@@ -21,15 +13,13 @@ package_names <- c('haven','dplyr','ggplot2','ggthemes','zoo','stringr','surviva
 
 pacman::p_load(char=package_names)
 
-
-
+# Set file paths
 ## AHRI data
-
-data_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/AHRI_2023'
-output_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/HIV_SES/Outputs'
+data_dir <- 'E:/PaulMee/HDSS'
 ## Local copy of AHRI R code
-#code_dir <- 'E:/PaulMee/R/ahri_code/'
-code_dir <- 'C:/github/ahri_inc/avdm_ahri_code/R/'
+code_dir <- 'E:/PaulMee/R/ahri_code/'
+## Any outputs from the analyses
+output_dir <- 'E:/PaulMee/Outputs'
 
 ## This is a download of the files from Alain Vandermael's AHRI R library 
 ## The files with suffix 'PM' have been updated to reflect changes in data file names 
@@ -105,6 +95,8 @@ if(gender=="all") {
 }      
 
 
+
+
 ### Load HIV surveillance data 
 hiv <- readHIVData()
 ### Get Episodes- Reads the surveillance episodes file and writes an rda file
@@ -129,15 +121,6 @@ mdat <- MIdata(rtdat, Args)
 n_cohort <- dplyr::n_distinct(rtdat$IIntID)
 ## Using first imputed dataset
 sero_data_imput.df <- mdat[[1]]
-
-###Filter Data to make temp dataset
-sero_data_temp.df <- sero_data_imput.df[(sero_data_imput.df$IIntID %in% c(16,17)), ]
-
-### Output as a csv file 
-output_fname <- '/sero_temp.csv'
-
-write.csv(sero_data_temp.df,paste0(output_dir,output_fname),row.names=FALSE)
-
 
 #n_cohort <- dplyr::n_distinct(mdat[[1]]$IIntID)
 
@@ -175,9 +158,14 @@ sero_data_imput.df <- sero_data_imput.df %>%
 
 sero_data_imput.df <- ungroup(sero_data_imput.df)
 
+# right censor the data at the latest HIV-negative date (if uninfected) or at the imputed seroconversion  date (if infected)
 
+sero_data_imput.df$censor_date <- NA
 
+sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
+                                         ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$sero_date, "No"))
 
+sero_data_imput.df$censor_date <- as.Date(as.numeric(sero_data_imput.df$censor_date), origin = "1970-01-01" )
 ### testing random sero date
 # sero_data_imput.df$censor_date <- ifelse(sero_data_imput.df$final_sero_status == 0, sero_data_imput.df$late_neg,
 #                                          ifelse(sero_data_imput.df$final_sero_status == 1, sero_data_imput.df$rand_sero_date, "No"))
@@ -231,7 +219,6 @@ sero_data_imput_ses.df  <- sero_data_imput_ses.df %>%
   arrange(Year) %>%
   mutate(wealth_quant_pca.imp2 = imputeTS::na_locf(wealth_quant_pca.imp1)) %>%
   mutate(wealth_quant_fa.imp2 = imputeTS::na_locf(wealth_quant_fa.imp1)) %>%
-  mutate(wealth_quant_mca.imp2 = imputeTS::na_locf(wealth_quant_mca.imp1)) %>%
   mutate(highest_edu_num.imp = imputeTS::na_locf(highest_edu_num)) %>% 
   mutate(urban_rural_num.imp = imputeTS::na_locf(urban_rural_num)) %>%
   mutate(km_clinic_num.imp = imputeTS::na_locf(km_clinic_num )) %>%
@@ -326,13 +313,15 @@ sero_data_imput_ses.df$sex <- factor(sero_data_imput_ses.df$Female,  levels = c(
 
 ### Select variables of interest
 
-
+# sero_data_imput_ses.df <- sero_data_imput_ses.df[c('IIntID','HouseholdId','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date','rand_sero_date',
+#                                                    'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
+#                                                    'censor_date','highest_edu_imp_fact','urban_rural_imp_fact',
+#                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2')]
 
 sero_data_imput_ses2.df <- sero_data_imput_ses.df[c('IIntID','BSIntId','HouseholdId','Isigodi','Year','sex','age_cat','late_neg','early_pos','sero_event','sero_date',
                                                     'obs_start','obs_end','first_start_date','last_end_date','final_sero_status',
-                                                    'highest_edu_imp_fact','urban_rural_imp_fact','km_clinic_imp_fact',
-                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score',
-                                                    'mca_score','wealth_quant_mca.imp2')]
+                                                    'censor_date','highest_edu_imp_fact','urban_rural_imp_fact','km_clinic_imp_fact',
+                                                    'wealth_quant_fa.imp2','wealth_quant_pca.imp2','pca_1d_score','fa_score')]
 
 
 
@@ -341,14 +330,12 @@ sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Urban_Rural = 
 sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Km_Clinic = km_clinic_imp_fact)
 sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_FA = wealth_quant_fa.imp2)
 sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_PCA = wealth_quant_pca.imp2)
-sero_data_imput_ses2.df <- dplyr::rename(sero_data_imput_ses2.df, Wealth_Quant_MCA = wealth_quant_mca.imp2)
 
 n_cohort <- dplyr::n_distinct(sero_data_imput_ses2.df$IIntID)
 
 
 ##### Generate a value for the Gini Coefficient for each Week Block 
 ### Count number of houses/ Bounded Structures per Isigodi 
-#### Using MCA derived SES scores
 
 tmp_isigodi_bs <- unique(sero_data_imput_ses2.df[c('BSIntId','Isigodi')])
 count_isigodi_bs <- tmp_isigodi_bs %>% dplyr::count(Isigodi)
@@ -388,11 +375,11 @@ sum(count_weekblock_house$n)
 
 ##table(sero_data_imput_ses2.df$Year,sero_data_imput_ses2.df$Week)
 
-### Filter sero_data_imput_ses2.df for years with MCA scores
+### Filter sero_data_imput_ses2.df for years with PCA scores
 
-sero_data_imput_mca.df  <- sero_data_imput_ses2.df %>% filter(!is.na(mca_score))
+sero_data_imput_pca.df  <- sero_data_imput_ses2.df %>% filter(!is.na(pca_1d_score))
 
-year_list <- sort(unique(sero_data_imput_mca.df$Year))
+year_list <- sort(unique(sero_data_imput_pca.df$Year))
 year_list
 
 ##Convert Gini to quantiles
@@ -403,20 +390,20 @@ n_quant = 5 # Number of quantiles
 #### Loop through a list of years
 for (year in year_list){
   print(as.character(year))
-  sero_data_year.df  <- sero_data_imput_mca.df %>% filter(Year == year)
+  sero_data_year.df  <- sero_data_imput_pca.df %>% filter(Year == year)
   
   ### Filter for none NA values and shift all PCA scores to positive values 
-  mca_data.df <- sero_data_year.df   %>% filter(!is.na(mca_score))
-  min_mca <- abs(min(mca_data.df$mca_score))
-  mca_data.df$mca_s_pos <- mca_data.df$mca_score + min_mca
+  pca_data.df <- sero_data_year.df   %>% filter(!is.na(pca_1d_score))
+  min_pca <- abs(min(pca_data.df$pca_1d_score))
+  pca_data.df$pca_s_pos <- pca_data.df$pca_1d_score + min_pca
   
   ### Gini for each weekblock
   ### gini function from reldist package
   ### Example code for calculating Gini by group 
   ### https://www.r-bloggers.com/2013/01/calculating-a-gini-coefficients-for-a-number-of-locales-at-once-in-r/ 
   
-  gini_weeks <- aggregate(mca_s_pos ~ Week,
-                          data = mca_data.df,
+  gini_weeks <- aggregate(pca_s_pos ~ Week,
+                          data = pca_data.df,
                           FUN = "gini")
   
   names(gini_weeks) <- c("Week", "gini")
