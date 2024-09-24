@@ -174,10 +174,16 @@ hiv_imput_cross_rank <- hiv_imput_cross %>%
   group_by(IIntID , obs_start) %>%
   dplyr::mutate(rank = order(order(date_diff, decreasing=FALSE)))
 
+hiv_imput_cross_rank  <- ungroup(hiv_imput_cross_rank)
+
+
 ### Select closest visit
 hiv_imput_cross_rank <- hiv_imput_cross_rank %>% filter(rank==1)
 hiv_imput_full <- hiv_imput_cross_rank 
 
+### Drop columns not needed
+
+hiv_imput_full <- subset(hiv_imput_full, select = -c(obs_mean_date,rd_year_mean_date,date_diff,rank))
 
 #### save HIV data file 
 save(hiv_imput_full, file = paste0(output_dir,'/ACDIS_hiv_full.RData'))

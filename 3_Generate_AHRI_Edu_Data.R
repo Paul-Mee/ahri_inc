@@ -83,13 +83,12 @@ ACDIS_edu_hh_BS <- ACDIS_edu_hh_BS[c('IIntId','HouseholdId', 'DSRound','VisitDat
 ACDIS_edu_hh_BS <- unique(ACDIS_edu_hh_BS)
 
 
-
 ### Loading Bounded Structure Data to filter for only Southern PIPSA PIPSA==1
 
 stata_data_file <- '/RD01-03 ACDIS BoundedStructures.dta'
 ACDIS_BS <- haven::read_dta(paste0(data_dir,stata_data_file))
 
-BS_PIP <- ACDIS_BS[c('BSIntId','PIPSA')]
+BS_PIP <- ACDIS_BS[c('BSIntId','PIPSA','IsUrbanOrRural','KmToNearestClinic')]
 ACDIS_edu_hh_BS_PIP <- merge(ACDIS_edu_hh_BS,BS_PIP,by='BSIntId',all.x=TRUE)
 
 ACDIS_edu_hh_BS_SPIP = ACDIS_edu_hh_BS_PIP[(ACDIS_edu_hh_BS_PIP$PIPSA %in% c(1)), ]
@@ -114,5 +113,133 @@ years_rd_edu <- years_rd_edu[c('DSRound','Round_Year')]
 
 ACDIS_edu_full <- merge(ACDIS_edu_hh_BS_SPIP_sub,years_rd_edu,by='DSRound')
 
+
+#### If multiple visits in a Round_Year keep first 
+
+## Ranking by HH Id , Year, year_diff
+ACDIS_edu_full <- ACDIS_edu_full %>%
+  group_by(IIntId,Round_Year) %>%
+  dplyr::mutate(rank = order(order(VisitDate, decreasing=FALSE)))
+
+ACDIS_edu_full <- ACDIS_edu_full %>% filter(rank==1)
+
+
+### https://www.researchgate.net/publication/267391685_RACIAL_DIFFERENCES_IN_EDUCATIONAL_ATTAINMENT_IN_SOUTH_AFRICA
+
+### Recode School (Highest School Level Variable)
+### None = 1,2
+### Lower primary (Grades 1,2,3,4) = 3,4,5,6,7 
+### Higher Primary (Grades 5,6,7) = 8,9,10
+### Lower Secondary (Grades 8,9,10) = 11,12,13
+### Higher Secondary (Grades 11,12) = 14,15
+
+### Recode Tertiary (Highest Tertiary Level )
+### Tertiary = 16,17,18,19,20
+
+# ACDIS_edu_full$highest_edu <- NA
+# 
+# ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(1,2)] <- "None"
+# ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(3,4,5,6,7)] <- "Lower Primary"
+# ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(8,9,10)] <- "Higher Primary"
+# ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(11,12,13)] <- "Lower Secondary"
+# ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(14,15)] <- "Higher Secondary"
+# ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- "Tertiary"
+
+
+### Recode to three levels
+
+ACDIS_edu_full$highest_edu <- NA
+
+ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(1,2)] <- "None"
+ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(3,4,5,6,7,8,9,10)] <- "Primary"
+ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestSchoolLevel %in% c(11,12,13,14,15)] <- "Secondary"
+ACDIS_edu_full$highest_edu[ACDIS_edu_full$HighestTertiaryLevel %in% c(16,17,18,19,20)] <- "Tertiary"
+
+#### Impute missing data - if no data in a particular round year impute from last recorded value using LOCF
+
+#### Unique list of Round_Years
+all_round_years <- as.data.frame(unique(ACDIS_edu_full$Round_Year))
+names(all_round_years)[1] <- "Round_Year"
+#### Unique list of IDs
+all_ids <- as.data.frame(unique(ACDIS_edu_full$IIntId))
+names(all_ids)[1] <- "IIntId"
+
+all_rd_year_id <- cross_join(all_round_years,all_ids)
+
+ACDIS_edu_full_imp <- merge(all_rd_year_id,ACDIS_edu_full,by=c('Round_Year','IIntId'),all.x = TRUE)
+ACDIS_edu_full_imp$highest_edu_imp <- ACDIS_edu_full_imp$highest_edu
+
+#### Drop ID's where all edu values are missing
+
+ACDIS_edu_full_imp <- ACDIS_edu_full_imp  %>%
+                      group_by(IIntId) %>%
+                      filter(!all(is.na(highest_edu_imp)))
+
+ACDIS_edu_full_imp <- ungroup(ACDIS_edu_full_imp)
+
+#### Convert highest_edu_imp to integer 
+ACDIS_edu_full_imp$highest_edu_imp_int <- as.integer(as.factor(ACDIS_edu_full_imp$highest_edu_imp))
+
+
+ACDIS_edu_full_imp$urban_rural  <- NA
+
+ACDIS_edu_full_imp$urban_rural[ACDIS_edu_full_imp$IsUrbanOrRural %in% c(2)] <- "Peri-Urban"
+ACDIS_edu_full_imp$urban_rural[ACDIS_edu_full_imp$IsUrbanOrRural %in% c(3)] <- "Rural"
+ACDIS_edu_full_imp$urban_rural[ACDIS_edu_full_imp$IsUrbanOrRural %in% c(4)] <- "Urban"
+
+ACDIS_edu_full_imp$urban_rural_fact <- factor(ACDIS_edu_full_imp$urban_rural,
+                                         levels = c("Rural","Urban","Peri-Urban"))
+
+
+ACDIS_edu_full_imp$km_clinic_cat <- NA
+ACDIS_edu_full_imp$km_clinic_cat[(ACDIS_edu_full_imp$KmToNearestClinic >= 0 & ACDIS_edu_full_imp$KmToNearestClinic <= 2 )] <- "0-2"
+ACDIS_edu_full_imp$km_clinic_cat[(ACDIS_edu_full_imp$KmToNearestClinic > 2 & ACDIS_edu_full_imp$KmToNearestClinic <= 4 )] <- ">2-4"
+ACDIS_edu_full_imp$km_clinic_cat[(ACDIS_edu_full_imp$KmToNearestClinic > 4 & ACDIS_edu_full_imp$KmToNearestClinic <= 6 )] <- ">4-6"
+ACDIS_edu_full_imp$km_clinic_cat[(ACDIS_edu_full_imp$KmToNearestClinic > 6 )] <- ">6"
+
+ACDIS_edu_full_imp$km_clinic_fact <- factor(ACDIS_edu_full_imp$km_clinic_cat,
+                                       levels = c("0-2",">2-4",">4-6",">6"))
+
+
+
+### Keep required variables
+
+ACDIS_edu_all <- ACDIS_edu_full_imp[c('IIntId','HouseholdId','Round_Year','highest_edu','highest_edu_imp_int','urban_rural_fact','km_clinic_fact')]
+
+#### Drop duplicates 
+
+ACDIS_edu_all <- unique(ACDIS_edu_all)
+
+
+###Impute missing data values after first education data recorded
+### Imputing highest education level and household Id - assuming that they stay 
+### living in the same household
+ACDIS_edu_all <- ACDIS_edu_all %>%
+  group_by(IIntId) %>%
+  arrange(Round_Year) %>%
+  mutate(highest_edu.imp1 = imputeTS::na_locf(x=highest_edu_imp_int, option = "locf", na_remaining = "keep")) %>%
+  mutate(household.imp1 = imputeTS::na_locf(x=HouseholdId, option = "locf", na_remaining = "keep"))
+
+ACDIS_edu_all  <- ungroup(ACDIS_edu_all)
+
+### Recode variables
+
+ACDIS_edu_all$ACDIS_edu_all_char <- ""
+
+ACDIS_edu_all$ACDIS_edu_all_char[ACDIS_edu_all$highest_edu.imp1 == 1] <- "None"
+ACDIS_edu_all$ACDIS_edu_all_char[ACDIS_edu_all$highest_edu.imp1 == 2] <- "Primary"
+ACDIS_edu_all$ACDIS_edu_all_char[ACDIS_edu_all$highest_edu.imp1 == 3] <- "Secondary"
+ACDIS_edu_all$ACDIS_edu_all_char[ACDIS_edu_all$highest_edu.imp1 == 4] <- "Tertiary"
+
+
+ACDIS_edu_all <- dplyr::rename(ACDIS_edu_all, 'highest_edu_imp' = 'ACDIS_edu_all_char')
+ACDIS_edu_all <- dplyr::rename(ACDIS_edu_all, 'HouseholdId_imp' = 'household.imp1')
+
+### Keep required variables
+
+ACDIS_edu_all <- ACDIS_edu_all[c('IIntId','HouseholdId','HouseholdId_imp','Round_Year','highest_edu','highest_edu_imp','urban_rural_fact','km_clinic_fact')]
+
+
+
 #### save Education data file 
-save(ACDIS_edu_full, file = paste0(output_dir,'/ACDIS_edu_full.RData'))
+save(ACDIS_edu_all, file = paste0(output_dir,'/ACDIS_edu_all.RData'))

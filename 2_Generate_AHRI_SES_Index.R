@@ -1159,12 +1159,14 @@ summary_dat$percent_NA <- summary_dat$NA_sum/summary_dat$n_tot*100
 #print(n=21,summary_dat)
 #
 
+#### Impute for all vlaues after first present values with LOCF
+
 ass_ses_full_imp  <- ass_ses_full %>%
   group_by(HHIntId) %>%
   arrange(Round_Year) %>%
-  mutate(wealth_quant_pca.imp1 = imputeTS::na_locf(wealth_quantile_pca)) %>%
-  mutate(wealth_quant_fa.imp1 = imputeTS::na_locf(wealth_quantile_fa)) %>%
-  mutate(wealth_quant_mca.imp1 = imputeTS::na_locf(wealth_quantile_mca))
+  mutate(wealth_quant_pca.imp1 = imputeTS::na_locf(x=wealth_quantile_pca, option = "locf", na_remaining = "keep")) %>%
+  mutate(wealth_quant_fa.imp1 = imputeTS::na_locf(x=wealth_quantile_fa, option = "locf", na_remaining = "keep")) %>%
+  mutate(wealth_quant_mca.imp1 = imputeTS::na_locf(x=wealth_quantile_mca, option = "locf", na_remaining = "keep"))
 
 ass_ses_full_imp  <- ungroup(ass_ses_full_imp )
 
