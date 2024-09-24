@@ -10,7 +10,7 @@ rm(list = ls())
 
 # Define vector of package names
 
-package_names <- c('dplyr','ggplot2','ggsurvfit')
+package_names <- c('dplyr','ggplot2','ggsurvfit','survminer')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -59,8 +59,8 @@ HIV_edu_SES$sex <- factor(HIV_edu_SES$Female,  levels = c(0, 1),
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2005-01-01")
-end_date <- as.Date("2014-12-31")
+start_date <- as.Date("2015-01-01")
+end_date <- as.Date("2021-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
