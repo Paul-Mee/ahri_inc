@@ -10,7 +10,7 @@ rm(list = ls())
 
 # Define vector of package names
 
-package_names <- c('dplyr','ggplot2','ggsurvfit','survminer')
+package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate','ggpubr','grid')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -122,6 +122,13 @@ surv_dat <- within(surv_dat, obs_end[(surv_dat$obs_start < end_date) &
 
 surv_dat$obs_end <- as.Date(surv_dat$obs_end)
 
+#### Generate earliest observation date for each individual 
+
+### Latest observation date 
+surv_dat <- surv_dat %>%
+  group_by(IIntID) %>%
+  dplyr::mutate(first_obs_date = (min(obs_start)))
+
 
 ### Count number of individuals in cohort 
 n_cohort <- dplyr::n_distinct(surv_dat$IIntID)
@@ -131,9 +138,9 @@ n_sero <- sum(surv_dat$sero_event)
 
 ### list of those who sero convert 
 
-tmp <- filter(surv_dat,(surv_dat$sero_event==1))
-tmp <- tmp[c('IIntID')]
-write.csv(tmp,file=paste0(output_dir,"/id_sero_open.csv"))
+# tmp <- dplyr::filter(surv_dat,(surv_dat$sero_event==1))
+# tmp <- tmp[c('IIntID')]
+# write.csv(tmp,file=paste0(output_dir,"/id_sero_open.csv"))
 
 print(paste0("Number in starting cohort - HIV negative on ",as.character(start_date), " = ", as.character(n_cohort)))
 print(paste0("Number of sero-conversions ",as.character(n_sero)))
@@ -145,6 +152,10 @@ print(paste0("Number of sero-conversions ",as.character(n_sero)))
 surv_dat$ntime <- surv_dat$obs_end - surv_dat$obs_start
 py_tot <- as.integer(sum(surv_dat$ntime))/365.25
 print(paste0("Total person years of observation =  ",as.character(py_tot)))
+
+### Total incidence 
+
+tot_inc <- n_sero/py_tot*100
 
 ### Events and PY by SES strata - by individual observations
 
@@ -159,12 +170,19 @@ sum_event_ses_obs
 events_fname <- paste0(output_dir,"/events_ses_obs_open_",as.character(start_date),"_",as.character(end_date),".csv")
 write.csv(sum_event_ses_obs,file = events_fname)
 
+### Drop Age variable
+surv_dat <- subset(surv_dat, select= -Age)
 
-surv_dat <- dplyr::rename(surv_dat, 'Urban_Rural' = 'urban_rural_fact')
-surv_dat <- dplyr::rename(surv_dat, 'Km_Clinic' = 'km_clinic_fact')
+## Rename variables
+surv_dat <- dplyr::rename(surv_dat, Education = education )
+surv_dat <- dplyr::rename(surv_dat, Setting = urban_rural_fact)
+surv_dat <- dplyr::rename(surv_dat, Clinic_Distance = km_clinic_fact)
+surv_dat <- dplyr::rename(surv_dat, Age = age_cat)
+surv_dat <- dplyr::rename(surv_dat, Sex = sex)
+surv_dat <- dplyr::rename(surv_dat, SEP = SES)
 
 ### Select required variables 
-tab_dat <- surv_dat[c('IIntID','Year','sex','age_cat','SES','education','Urban_Rural','Km_Clinic','ntime','sero_event','obs_start')]
+tab_dat <- surv_dat[c('IIntID','Round_Year','Sex','Age','SEP','Education','Setting','Clinic_Distance','ntime','sero_event','obs_start')]
 
 ### Add total ntime column 
 tab_dat <- tab_dat %>% 
@@ -179,20 +197,20 @@ tab_dat <- tab_dat %>%
 
 ### Add count of observations by group and select 1st row (1st year of observation)
 
-tab_dat <- tab_dat %>% dplyr::arrange(Year)
+tab_dat <- tab_dat %>% dplyr::arrange(Round_Year)
 
 tab_dat <- tab_dat %>% 
   dplyr::group_by(IIntID) %>% 
   dplyr::mutate(icount=row_number())
 
-tab_dat <- tab_dat %>% filter(icount==1)
+tab_dat <- tab_dat %>% dplyr::filter(icount==1)
 
 rm(cohort_tab)
 
 
 ### summarise by variable 
 ### list of summary variables 
-var_list <- c('sex','age_cat','SES','education','Urban_Rural','Km_Clinic')
+var_list <- c('Sex','Age','SEP','Education','Setting','Clinic_Distance')
 
 for (var in var_list) {
   cat_dat <- tab_dat[c(var,'icount','seroconv','total_ntime')]
@@ -235,241 +253,174 @@ cohort_fname <- paste0(output_dir,"/cohort_summary_",as.character(start_date),"_
 write.csv(cohort_tab,file = cohort_fname)
 
 
+#### Extended KM analysis allowinf for time varying covariates 
+
+surv_dat$tstart_num <- as.integer(surv_dat$obs_start - surv_dat$first_obs_date)
+surv_dat$tstop_num <- as.integer(surv_dat$obs_end - surv_dat$first_obs_date)
 
 
-### Sero Events allowing for time varying covariates - analyses within each episode
+### Plot 1 SEP 
+### Survival analysis taking account of time varying covariates
 
+s1 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event==1) ~ SEP, data=surv_dat, id=IIntID,cluster=HouseholdId)
 
-
-plot_title <- paste0("Kaplan-Meier plot  \n 
-Probability of seroconversion within each year of observation from  ",lubridate::year(start_date),
-                     " to ",lubridate::year(end_date))
-
-
-p2 <-  survfit(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat,id=IIntID,cluster=HouseholdId)%>% 
-  ggsurvfit(type = "survival") +
-  labs(
-    x = "Days to serconversion",
-    y = "Survival Probability",
-    title = plot_title,
-    colour = "SES"
-  )  +
-  scale_color_manual(values = c('red', 'blue','green'),
-                     labels = c('Poorest', 'Mid','Wealthiest')) +
-  theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
+p2 <- ggsurvplot(s1, 
+                 #fun="pct",
+                  linetype="solid" 
+                  ,risk.table = FALSE, conf.int = FALSE, 
+                  break.x.by = 500, censor=FALSE,
+                  ylab = "Probability of remaining seronegative",
+                  xlab = "Follow-up time (days)",
+                  legend.title="SEP")
+p2$plot <- p2$plot + 
+            ylim(c(0.5,1.0)) + 
+            scale_color_manual(values = c('red', 'blue','green'),
+            labels = c('Poorest', 'Mid','Wealthiest')) +
+        theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
         legend.text=element_text(size=12,face="bold"),
         axis.text.x = element_text(size=12, face="bold", color = "black"),
         axis.text.y = element_text(size=12, face="bold", color = "black"),
         axis.title = element_text(face="bold"),
-        legend.title = element_text(face="bold"),
-        legend.position=c(.75,.75)) 
-p2
+        legend.title = element_text(size=12, face="bold"),
+        legend.position=c(.25,.40)) 
+
 
 ### Log-rank test 
 
-surv_diff <- survdiff(Surv(time=ntime, event=sero_event==1) ~ SES, data=surv_dat)
+surv_diff <- survival::survdiff(Surv(time=ntime, event=sero_event==1) ~ SEP, data=surv_dat)
 surv_diff
 
-plot_fname <- paste0(output_dir,"/km_all_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(plot_fname,p2,  width=20, height=15, units="cm")
+### # Perform pairwise comparisons
+pairwise_test <- pairwise_survdiff(Surv(time=ntime, event=sero_event==1) ~ SEP, data=surv_dat)
 
+# Extract the p-value matrix
+p_matrix <- pairwise_test$p.value
 
-### New version where each individual has one row and we use starting SES 
+# Format the p-value table, converting all p-values < 0.05 to "< 0.05"
+formatted_p_matrix <- apply(p_matrix, c(1, 2), function(x) {
+  if (!is.na(x) && x < 0.05) {
+    "< 0.05"
+  } else {
+    format(x, digits = 2)
+  }
+})
 
-### Calculate starting SES value by individual
+# Convert the formatted matrix into a data frame for better printing
+p_table <- as.data.frame(formatted_p_matrix)
 
-surv_dat <- surv_dat %>% arrange(obs_start)
+# Convert the p-value table into a ggtexttable object
+pval_table <- ggpubr::ggtexttable(p_table, rows = rownames(p_table), theme = ttheme("minimal"))
 
-surv_dat <- surv_dat  %>% 
-  group_by(IIntID) %>% 
-  mutate(SES_start = SES[1])
+# Convert the table to a grob (graphical object) for positioning
+table_grob <- ggplotGrob(pval_table)
 
-### Final status
-# surv_dat <- surv_dat %>%
-#   group_by(IIntID) %>%
-#   dplyr::mutate(mean_SES = round((mean(Wealth_Quant_PCA))))
+p2_tab <- p2
 
-### First obs_start
-surv_dat <- surv_dat %>%
-  group_by(IIntID) %>%
-  dplyr::mutate(first_obs_start = min(obs_start))
+# Add the table to the plot using annotation_custom
+p2_tab$plot <- p2_tab$plot + 
+  annotation_custom(table_grob, 
+                    xmin = 1500, xmax = Inf,  # Adjust these values for horizontal placement
+                    ymin = 0.6, ymax = 0.8)  # Adjust these values for vertical placement
+#p2_tab
 
-### Last obs_end
-surv_dat <- surv_dat %>%
-  group_by(IIntID) %>%
-  dplyr::mutate(last_obs_end = max(obs_end))
+# Define the title text and its position
+title_text <- "p-values for pairwise comparisons of strata"
+title_grob <- textGrob(title_text, gp = gpar(fontsize = 12, fontface = "plain"), just = "center")
 
-surv_dat <- ungroup(surv_dat)
+# Add the title below the table
+p2_tab$plot <- p2_tab$plot + 
+  annotation_custom(title_grob, 
+                    xmin = 1500, xmax = Inf,  # Adjust these values for horizontal placement
+                    ymin = 0.57, ymax = 0.70)  # Adjust these values for vertical placement
+p2_tab
 
+plot_fname <- paste0(output_dir,"/km_all_open_sep_",as.character(start_date),"_",as.character(end_date),".png")
+ggpubr::ggexport(filename = plot_fname,width=694,height=420,
+                 plot = p2_tab, device = "png")
 
-surv_dat_total <- unique(surv_dat[c('IIntID','first_obs_start',
-                                              'last_obs_end','final_sero_status','SES_start')])
+### Plot 2  Education 
 
-surv_dat_total$SES <- surv_dat_total$SES_start
+### Drop missing values for education and convert to factor
+### Survival analysis taking account of time varying covariates
 
+surv_dat_edu <- surv_dat
 
-surv_dat_total$ntime <- surv_dat_total$last_obs_end - surv_dat_total$first_obs_start
+surv_dat_edu <- subset(surv_dat_edu,Education!="")
+surv_dat_edu$Education <- as.factor(surv_dat_edu$Education)
 
-### maximum ntime
-max_ntime = as.integer(max(surv_dat_total$ntime))
+s2 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event) ~ Education, data=surv_dat_edu, id=IIntID,cluster=HouseholdId)
 
-### Sero Events by starting SES group 
+p3 <- ggsurvplot(s2,linetype="solid"
+                 #,fun="pct",
+                 ,risk.table = FALSE, conf.int = FALSE, 
+                 break.x.by = 500, censor=FALSE,
+                 ylab = "Probability of remaining seronegative",
+                 xlab = "Follow-up time (days)",
+                 legend.title="Highest level of Education")
 
-plot_title <- paste0("Kaplan-Meier plot  \n 
-Probability of seroconversion from  ",lubridate::year(start_date),
-                     " to ",lubridate::year(end_date))
-
-
-p3 <-  survfit(Surv(time=ntime, event=final_sero_status==1) ~ SES, data=surv_dat_total,id=IIntID)%>% 
-  ggsurvfit(type = "survival") +
-  labs(
-    x = "Days to serconversion",
-    y = "Survival Probability",
-    title = plot_title,
-    colour = "SES"
-  )  +
-  scale_color_manual(values = c('red', 'blue','green'),
-                     labels = c('Poorest', 'Mid','Wealthiest')) +
+p3$plot <- p3$plot + 
+  ylim(c(0.5, 1.0)) + 
+  scale_color_manual(values = c('brown','red', 'blue','green'),
+                     labels = c('None', 'Primary','Secondary','Tertiary')) +
   theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
         legend.text=element_text(size=12,face="bold"),
         axis.text.x = element_text(size=12, face="bold", color = "black"),
         axis.text.y = element_text(size=12, face="bold", color = "black"),
         axis.title = element_text(face="bold"),
-        legend.title = element_text(face="bold"),
-        legend.position=c(.75,.75)) +
-  scale_x_continuous(limits=c(0,max_ntime-10 ))
+        legend.title = element_text(size=12, face="bold"),
+        legend.position=c(.25,.40))  
 p3
+### Log-rank test 
 
+surv_diff <- survival::survdiff(Surv(time=ntime, event=sero_event==1) ~ Education, data=surv_dat)
+surv_diff
 
-plot_fname <- paste0(output_dir,"/km_start_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(plot_fname,p3,  width=20, height=15, units="cm")
+### # Perform pairwise comparisons
+pairwise_test <- pairwise_survdiff(Surv(time=ntime, event=sero_event==1) ~ Education, data=surv_dat_edu)
 
+# Extract the p-value matrix
+p_matrix <- pairwise_test$p.value
 
-
-### Cox Regression  - Age - SES fixed at start of period
-#### Survival Analysis (https://cran.r-project.org/web/packages/survivalAnalysis/vignettes/multivariate.html)
-#### http://www.sthda.com/english/wiki/cox-proportional-hazards-model
-
-
-#### Univariable analysis 
-
-
-covariates <- c('age_cat', 'sex',  'SES', 'education','Urban_Rural','Km_Clinic')
-univ_formulas <- sapply(covariates,
-                        function(x) as.formula(paste('Surv(ntime, sero_event)~', x)))
-
-univ_models <- lapply( univ_formulas, function(x){coxph(x, data = surv_dat,id=IIntID,cluster=HouseholdId_imp)})
-
-cox_fname <- paste0(data_dir,"/cox_univ_open_",as.character(start_date),"_",as.character(end_date),".txt")
-for (i in seq(1,length(covariates),1)) {
-  res.cox <- univ_models[[i]]
-  if(i == 1){
-    sink(cox_fname,append=FALSE)
-    print(summary(res.cox))
+# Format the p-value table, converting all p-values < 0.05 to "< 0.05"
+formatted_p_matrix <- apply(p_matrix, c(1, 2), function(x) {
+  if (!is.na(x) && x < 0.05) {
+    "< 0.05"
   } else {
-    sink(cox_fname,append=TRUE)
-    print(summary(res.cox))
+    format(x, digits = 2)
   }
-  sink(file=NULL)
-  print(summary(res.cox))
-}
+})
 
-### tabulating results
-### https://argoshare.is.ed.ac.uk/healthyr_book/cox-proportional-hazards-regression.html
+# Convert the formatted matrix into a data frame for better printing
+p_table <- as.data.frame(formatted_p_matrix)
 
-#### Plotting Forest plot for multiple Univariable regressions
+# Convert the p-value table into a ggtexttable object
+pval_table <- ggpubr::ggtexttable(p_table, rows = rownames(p_table), theme = ttheme("minimal"))
 
-### https://github.com/kassambara/survminer/issues/459
-### Or this 
-### https://rdrr.io/cran/survivalAnalysis/man/forest_plot.html
+# Convert the table to a grob (graphical object) for positioning
+table_grob <- ggplotGrob(pval_table)
 
-#### Multivariable analysis
+p3_tab <- p3
 
-surv_dat <- subset(surv_dat, select = -c(Age) ) 
+# Add the table to the plot using annotation_custom
+p3_tab$plot <- p3$plot + 
+  annotation_custom(table_grob, 
+                    xmin = 1300, xmax = Inf,  # Adjust these values for horizontal placement
+                    ymin = 0.5, ymax = 0.7)  # Adjust these values for vertical placement
 
-## Rename variables
-surv_dat <- dplyr::rename(surv_dat, Education = education )
-surv_dat <- dplyr::rename(surv_dat, Setting = Urban_Rural)
-surv_dat <- dplyr::rename(surv_dat, Clinic_Distance = Km_Clinic)
-surv_dat <- dplyr::rename(surv_dat, Age = age_cat)
-surv_dat <- dplyr::rename(surv_dat, Sex = sex)
+# Define the title text and its position
+title_text <- "p-values for pairwise comparisons of strata"
+title_grob <- textGrob(title_text, gp = gpar(fontsize = 12, fontface = "plain"), just = "center")
 
-cox_fname <- paste0(data_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-#res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex + Education + Setting + Clinic_Distance, data =  as.data.frame(surv_dat),cluster=HouseholdId)
-res.cox <- coxph(Surv(ntime, sero_event) ~  SES,data =  as.data.frame(surv_dat),cluster=HouseholdId)
-sink(cox_fname,append=FALSE)
-summary(res.cox)
-sink(file=NULL)
-summary(res.cox)
+# Add the title below the table
+p3_tab$plot <- p3_tab$plot + 
+  annotation_custom(title_grob, 
+                    xmin = 1300, xmax = Inf,  # Adjust these values for horizontal placement
+                    ymin = 0.33, ymax = 0.70)  # Adjust these values for vertical placement
+p3_tab
 
-forest_title <- paste0("Multivariate Cox PH regression model  
-Hazard Ratio for serconversion ",year(start_date)," to ",year(end_date))
-
-p4 <- ggforest(model=res.cox,
-               main = forest_title,
-               cpositions = c(0.02, 0.12, 0.3),
-               fontsize = 1.0) 
-
-p4
-
-
-forest_fname <- paste0(output_dir,"/forest_multi_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(forest_fname,p4, width=30, height=18, units="cm")
-
-
-### Forest plot SES univariable
-
-cox_fname <- paste0(data_dir,"/cox_uni_open_",as.character(start_date),"_",as.character(end_date),".txt")
-#res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex , data =  as.data.frame(surv_dat),cluster=HouseholdId)
-#res.cox <- coxph(Surv(ntime, sero_event) ~  SES , data =  as.data.frame(surv_dat),cluster=HouseholdId)
-res.cox <- coxph(Surv(ntime, sero_event) ~  SES , data =  as.data.frame(surv_dat))
-sink(cox_fname,append=FALSE)
-summary(res.cox)
-sink(file=NULL)
-summary(res.cox)
-
-forest_title <- paste0("Univariable Cox PH regression model  
-Hazard Ratio for serconversion ",year(start_date)," to ",year(end_date))
-
-p5 <- ggforest(model=res.cox,
-               main = "",
-               cpositions = c(0.02, 0.1, 0.35),
-               fontsize = 1.1) 
-
-p5
-forest_fname <- paste0(output_dir,"/forest_uni_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(forest_fname,p5, width=20, height=8, units="cm")
-
-### Forest plot SES control for Age and Sex
-
-cox_fname <- paste0(output_dir,"/cox_multi_open_",as.character(start_date),"_",as.character(end_date),".txt")
-res.cox <- coxph(Surv(ntime, sero_event) ~  SES + Age + Sex , data =  as.data.frame(surv_dat),cluster=HouseholdId)
-
-sink(cox_fname,append=FALSE)
-summary(res.cox)
-sink(file=NULL)
-summary(res.cox)
-
-forest_title <- paste0("Univariable Cox PH regression model  
-Hazard Ratio for serconversion ",year(start_date)," to ",year(end_date))
-
-p6 <- ggforest(model=res.cox,
-               main = "",
-               cpositions = c(0.02, 0.1, 0.35),
-               fontsize = 1.1) 
-
-p6
-forest_fname <- paste0(output_dir,"/forest_multi_open_",as.character(start_date),"_",as.character(end_date),".png")
-ggsave(forest_fname,p6, width=20, height=8, units="cm")
-
-
-#### Testing the proportional Hazards assumption 
-### http://www.sthda.com/english/wiki/cox-model-assumptions
-### "From the output above, the test is not statistically significant for each of the covariates, 
-### and the global test is also not statistically significant. Therefore, we can assume the proportional hazards."
-
-test.ph <- survival::cox.zph(res.cox)
-test.ph
+plot_fname <- paste0(output_dir,"/km_all_open_edu_",as.character(start_date),"_",as.character(end_date),".png")
+ggpubr::ggexport(filename = plot_fname,width=694,height=420,
+                 plot = p3_tab, device = "png")
 
 
 ### tabulating results 
@@ -477,9 +428,9 @@ test.ph
 ### https://finalfit.org/articles/finalfit.html
 
 #### Summary analysis using finalfit
+#### SEP
 
-#covariates <- c('Age', 'Sex',  'SES', 'Education' , 'Setting','cluster(HouseholdId)')
-covariates <- c('Age', 'Sex', 'SES', 'Education','Setting','Clinic_Distance','gini_quant_fact','cluster(HouseholdId)')
+covariates <- c( 'SEP','Age','Sex','Setting','Clinic_Distance','cluster(HouseholdId)')
 dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 
@@ -495,18 +446,15 @@ knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 
 ### https://argoshare.is.ed.ac.uk/healthyr_book/ms-word-via-knitrr-markdown.html
 
-### Subdivide by gender
 
-surv_dat_male <- filter(surv_dat,(surv_dat$Sex=="Male"))
-surv_dat_female <- filter(surv_dat,(surv_dat$Sex=="Female"))
+#### Summary analysis using finalfit
+#### Education 
 
-#covariates <- c( 'Age','Education','cluster(HouseholdId)')
-# covariates <- c('Age', 'Sex', 'SES', 'Education','Setting','Clinic_Distance','cluster(HouseholdId)')
-# dependent <- "Surv(time=ntime, event=sero_event==1)"
+covariates <- c( 'Education','Age','Sex','Setting','Clinic_Distance','cluster(HouseholdId)')
+dependent <- "Surv(time=ntime, event=sero_event==1)"
 
 
-
-surv_dat %>%
+surv_dat_edu %>%
   finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
                            add_dependent_label = FALSE) -> t1 
 # rename("Overall survival" = label) %>% 
@@ -514,22 +462,7 @@ surv_dat %>%
 # rename("  " = all) -> t1
 knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 
+### Use r markdown to get nicely formatted tables in Word
 
-
-surv_dat_male %>%
-  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
-                           add_dependent_label = FALSE) -> t1 
-# rename("Overall survival" = label) %>% 
-# rename(" " = levels) %>% 
-# rename("  " = all) -> t1
-knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
-
-
-surv_dat_female %>%
-  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
-                           add_dependent_label = FALSE) -> t1 
-# rename("Overall survival" = label) %>% 
-# rename(" " = levels) %>% 
-# rename("  " = all) -> t1
-knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+### https://argoshare.is.ed.ac.uk/healthyr_book/ms-word-via-knitrr-markdown.html
 

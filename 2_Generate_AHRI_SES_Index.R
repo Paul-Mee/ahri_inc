@@ -1,9 +1,6 @@
 ###
 ### This code takes the AHRI household data and calculates SES rankings for households and 
 ### individuals in those households 
-### In this version SES quantiles are calculated within each year 
-### Variables are only included which have been consistently collected over time
-### in order to allow comparison of changes over time
 ### Interpolation is used to substitute for missing data 
 ### Three methods are use to generate the summary Wealth Index , Factor Analysis, Multiple Correspondence Analysis
 ### and Principal Components  Analysis 
@@ -38,21 +35,12 @@ package_names <- c('haven','dplyr','survival','psych','lubridate','schoRsch','da
 
 pacman::p_load(char=package_names)
 
-#### Utility to generate bibtek files to reference R packages
-knitr::write_bib(c("FactoMineR", "factoextra"), file = paste0(output_dir,"/packages.bib"))
-
-
 
 ### Define Function - Cat_Bin - Converts a categorical variable to a series of binary variables each 
 ### representing a level of the categorical variable as a yes/no
 ### Input variables - Df name , index_vars (vector of the index column names) , 
 ### categorical value column name , max non-missing value 
 
-
-# df = 'ACDIS_hh'
-# index_vars = c('HHIntId','Visit_Year')
-# col_name = 'DrinkWaterSource'
-# max_val=16 
 
 cat_bin <- function(df,index_vars, col_name,max_val){
   ## Header 

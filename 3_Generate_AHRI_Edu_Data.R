@@ -206,9 +206,6 @@ ACDIS_edu_full_imp$km_clinic_fact <- factor(ACDIS_edu_full_imp$km_clinic_cat,
 
 ACDIS_edu_all <- ACDIS_edu_full_imp[c('IIntId','HouseholdId','Round_Year','highest_edu','highest_edu_imp_int','urban_rural_fact','km_clinic_fact')]
 
-#### Drop duplicates 
-
-ACDIS_edu_all <- unique(ACDIS_edu_all)
 
 
 ###Impute missing data values after first education data recorded
