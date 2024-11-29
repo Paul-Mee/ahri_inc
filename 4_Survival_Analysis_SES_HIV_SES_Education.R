@@ -10,7 +10,8 @@ rm(list = ls())
 
 # Define vector of package names
 
-package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate','ggpubr','grid')
+package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate','ggpubr','grid',
+                   'viridis')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -55,6 +56,124 @@ HIV_edu_SES$age_cat  <- factor(HIV_edu_SES$age_cat , levels = c("15-24", "25-39"
 ### Sex as a factor 
 HIV_edu_SES$sex <- factor(HIV_edu_SES$Female,  levels = c(0, 1),
                                      labels = c("Male", "Female"))
+
+
+###
+### Aggregate HIV_Edu_SES by Round_Year and wealth_quant_mca.imp1 and
+### calculate the sum of time as total_PY and sero_event as  total_sero_events in each category 
+### then calculate incidence 
+### Then plot the raw data and smoothed curve through the data points 
+### as crosses in ggplot with Round_Year on the X-axis and incidence on the Y-axis
+### there will be one line for each strata of wealth_quant_mca.imp1
+### use different colours for each strata
+
+
+aggregated_data <- HIV_edu_SES %>%
+  group_by(Round_Year, wealth_quant_mca.imp1) %>%
+  summarise(
+    total_PY = sum(Time, na.rm = TRUE)/365.25,
+    total_sero_events = sum(sero_event, na.rm = TRUE),
+    incidence = total_sero_events / total_PY*100
+  ) %>%
+  ungroup()
+
+### Drop NA values for incidence from aggregated_data
+aggregated_data <- na.omit(aggregated_data)
+### Create variable SES in which wealth_quant_mca.imp1 is a factor
+aggregated_data$SES <- factor(aggregated_data$wealth_quant_mca.imp1,
+                                                levels = c("1","2","3"),
+                                                labels = c("Poorest","Mid","Wealthiest"))
+
+
+
+# Ensure Round_Year is numeric
+aggregated_data$Round_Year <- as.numeric(as.character(aggregated_data$Round_Year))
+
+# Plot with adjusted smoothing
+# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
+
+start_year <- 2005
+end_year <- 2021
+
+aggregated_data <- dplyr::filter(aggregated_data, 
+                                 Round_Year >= start_year & Round_Year <= end_year)
+
+
+
+# Plot with restricted x-axis range
+ggplot(aggregated_data, aes(x = Round_Year, y = incidence, color = SES, fill = SES)) +
+  # Add original data points as small X symbols
+  geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
+  # Add a smoothed curve through the data points with the same color as the data points
+  stat_smooth(
+    method = "loess", 
+    span = 0.5, 
+    se = TRUE, 
+    alpha = 0.3
+  ) + # Smoothed curve with shaded SE
+  scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
+  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
+  scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
+  labs(
+    title = "Incidence by Round Year and SES Quantile 
+              (with 95% confidence intervals)",
+    x = "Round Year",
+    y = "Incidence (events per 100 person-years)",
+    color = "SES Quantile",
+    fill = "SES Quantile"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") + # Move legend to bottom of plot
+  theme(plot.title = element_text(size=12,hjust=0.5)) # Centre and decrease size of plot title
+
+
+# Save the plot as a PNG file
+ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_ses_quantile.png"), width = 6, height = 4)
+
+
+#### Now aggregate by sex and Round_Year
+# Example code to aggregate data by Round_Year and sex
+aggregated_data <- HIV_edu_SES %>%
+  group_by(Round_Year, sex) %>%
+  summarise(
+    total_PY = sum(Time, na.rm = TRUE) / 365.25, # Convert days to person-years
+    total_sero_events = sum(sero_event, na.rm = TRUE),
+    incidence = total_sero_events / total_PY * 100 # Incidence per 100 person-years
+  ) %>%
+  ungroup()
+
+# Drop NA values for incidence from aggregated_data
+aggregated_data <- na.omit(aggregated_data)
+
+# Ensure Round_Year is numeric
+aggregated_data$Round_Year <- as.numeric(as.character(aggregated_data$Round_Year))
+
+
+aggregated_data <- dplyr::filter(
+  aggregated_data, 
+  Round_Year >= start_year & Round_Year <= end_year
+)
+
+# Plot with restricted x-axis range, grouped by sex
+ggplot(aggregated_data, aes(x = Round_Year, y = incidence, color = sex)) +
+  #geom_point(shape = 3, size = 3) + # Crosses for raw data
+  geom_smooth(method = "loess", span = 0.5, se = FALSE) + # Smoothed curve with larger span
+  scale_color_viridis_d(option = "D", begin = 0.2, end = 0.8) + # Viridis palette for sex
+  scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
+  labs(
+    title = "Incidence by Round Year and Sex",
+    x = "Round Year",
+    y = "Incidence (events per 100 person-years)",
+    color = "Sex"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") # Move legend to bottom of plot
+
+# Save the plot as a PNG file
+ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_sex_quantile.png"), width = 6, height = 4)
+
+
+
 
 
 ### Set start and end dates for survival analysis 
@@ -262,18 +381,25 @@ surv_dat$tstop_num <- as.integer(surv_dat$obs_end - surv_dat$first_obs_date)
 ### Plot 1 SEP 
 ### Survival analysis taking account of time varying covariates
 
+plot_title <- paste0(as.character(lubridate::year(start_date)),
+                     " - ",
+                     as.character(lubridate::year(end_date))
+                      )
+
 s1 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event==1) ~ SEP, data=surv_dat, id=IIntID,cluster=HouseholdId)
 
-p2 <- ggsurvplot(s1, 
+p2 <- ggsurvplot(s1,
                  #fun="pct",
-                  linetype="solid" 
-                  ,risk.table = FALSE, conf.int = FALSE, 
+                 title=plot_title,
+                  linetype="solid", 
+                  risk.table = FALSE, conf.int = FALSE, 
                   break.x.by = 500, censor=FALSE,
                   ylab = "Probability of remaining seronegative",
                   xlab = "Follow-up time (days)",
                   legend.title="SEP")
+
 p2$plot <- p2$plot + 
-            ylim(c(0.5,1.0)) + 
+            ylim(c(0.7,1.0)) + 
             scale_color_manual(values = c('red', 'blue','green'),
             labels = c('Poorest', 'Mid','Wealthiest')) +
         theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
@@ -282,8 +408,8 @@ p2$plot <- p2$plot +
         axis.text.y = element_text(size=12, face="bold", color = "black"),
         axis.title = element_text(face="bold"),
         legend.title = element_text(size=12, face="bold"),
-        legend.position=c(.25,.40)) 
-
+        legend.position=c(0.20,0.65)) 
+p2
 
 ### Log-rank test 
 
@@ -319,9 +445,8 @@ p2_tab <- p2
 # Add the table to the plot using annotation_custom
 p2_tab$plot <- p2_tab$plot + 
   annotation_custom(table_grob, 
-                    xmin = 1500, xmax = Inf,  # Adjust these values for horizontal placement
-                    ymin = 0.6, ymax = 0.8)  # Adjust these values for vertical placement
-#p2_tab
+                    xmin = 100, xmax = 900,  # Adjust these values for horizontal placement
+                    ymin = 0.75, ymax = 0.9)  # Adjust these values for vertical placement
 
 # Define the title text and its position
 title_text <- "p-values for pairwise comparisons of strata"
@@ -330,11 +455,15 @@ title_grob <- textGrob(title_text, gp = gpar(fontsize = 12, fontface = "plain"),
 # Add the title below the table
 p2_tab$plot <- p2_tab$plot + 
   annotation_custom(title_grob, 
-                    xmin = 1500, xmax = Inf,  # Adjust these values for horizontal placement
-                    ymin = 0.57, ymax = 0.70)  # Adjust these values for vertical placement
+                    xmin = 100, xmax = 900,  # Adjust these values for horizontal placement
+                    ymin = 0.68, ymax = 0.90)  # Adjust these values for vertical placement
 p2_tab
 
 plot_fname <- paste0(output_dir,"/km_all_open_sep_",as.character(start_date),"_",as.character(end_date),".png")
+gg_obf_fname <- paste0(output_dir,"/km_all_open_sep_",as.character(start_date),"_",as.character(end_date),".RData")
+
+save(p2_tab,file=gg_obf_fname)
+
 ggpubr::ggexport(filename = plot_fname,width=694,height=420,
                  plot = p2_tab, device = "png")
 
@@ -350,9 +479,11 @@ surv_dat_edu$Education <- as.factor(surv_dat_edu$Education)
 
 s2 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event) ~ Education, data=surv_dat_edu, id=IIntID,cluster=HouseholdId)
 
-p3 <- ggsurvplot(s2,linetype="solid"
+p3 <- ggsurvplot(s2,
+                 linetype="solid",
+                 title = plot_title,
                  #,fun="pct",
-                 ,risk.table = FALSE, conf.int = FALSE, 
+                 risk.table = FALSE, conf.int = FALSE, 
                  break.x.by = 500, censor=FALSE,
                  ylab = "Probability of remaining seronegative",
                  xlab = "Follow-up time (days)",
@@ -368,7 +499,7 @@ p3$plot <- p3$plot +
         axis.text.y = element_text(size=12, face="bold", color = "black"),
         axis.title = element_text(face="bold"),
         legend.title = element_text(size=12, face="bold"),
-        legend.position=c(.25,.40))  
+        legend.position=c(0.20,0.55))  
 p3
 ### Log-rank test 
 
@@ -404,8 +535,8 @@ p3_tab <- p3
 # Add the table to the plot using annotation_custom
 p3_tab$plot <- p3$plot + 
   annotation_custom(table_grob, 
-                    xmin = 1300, xmax = Inf,  # Adjust these values for horizontal placement
-                    ymin = 0.5, ymax = 0.7)  # Adjust these values for vertical placement
+                    xmin = 100, xmax = 1000,  # Adjust these values for horizontal placement
+                    ymin = 0.50, ymax = 0.75)  # Adjust these values for vertical placement
 
 # Define the title text and its position
 title_text <- "p-values for pairwise comparisons of strata"
@@ -414,12 +545,16 @@ title_grob <- textGrob(title_text, gp = gpar(fontsize = 12, fontface = "plain"),
 # Add the title below the table
 p3_tab$plot <- p3_tab$plot + 
   annotation_custom(title_grob, 
-                    xmin = 1300, xmax = Inf,  # Adjust these values for horizontal placement
-                    ymin = 0.33, ymax = 0.70)  # Adjust these values for vertical placement
+                    xmin = 100, xmax = 1000,  # Adjust these values for horizontal placement
+                    ymin = 0.35, ymax = 0.75)  # Adjust these values for vertical placement
 p3_tab
 
 plot_fname <- paste0(output_dir,"/km_all_open_edu_",as.character(start_date),"_",as.character(end_date),".png")
-ggpubr::ggexport(filename = plot_fname,width=694,height=420,
+gg_obf_fname <- paste0(output_dir,"/km_all_open_edu_",as.character(start_date),"_",as.character(end_date),".RData")
+
+save(p3_tab,file=gg_obf_fname)
+
+ggpubr::ggexport(filename = plot_fname,width=1000,height=1000,
                  plot = p3_tab, device = "png")
 
 

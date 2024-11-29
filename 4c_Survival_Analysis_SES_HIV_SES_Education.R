@@ -11,7 +11,8 @@ rm(list = ls())
 # Define vector of package names
 
 package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate',
-                   'ggpubr','grid','finalfit','tidyr','stringr')
+                   'ggpubr','grid','finalfit','tidyr','stringr','gridExtra','patchwork',
+                   'RColorBrewer')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -60,8 +61,8 @@ HIV_edu_SES$sex <- factor(HIV_edu_SES$Female,  levels = c(0, 1),
 
 ### Set start and end dates for survival analysis 
 
-start_date <- as.Date("2015-01-01")
-end_date <- as.Date("2021-12-31")
+start_date <- as.Date("2005-01-01")
+end_date <- as.Date("2014-12-31")
 
 ### Create a cohort of all episodes for those under observation and known to be HIV negative at the start date 
 ### Episodes that start before the end date and finish after the start date are included 
@@ -254,7 +255,7 @@ cohort_fname <- paste0(output_dir,"/cohort_summary_",as.character(start_date),"_
 write.csv(cohort_tab,file = cohort_fname)
 
 
-#### Extended KM analysis allowinf for time varying covariates 
+#### Extended KM analysis allowing for time varying covariates 
 
 surv_dat$tstart_num <- as.integer(surv_dat$obs_start - surv_dat$first_obs_date)
 surv_dat$tstop_num <- as.integer(surv_dat$obs_end - surv_dat$first_obs_date)
@@ -268,7 +269,7 @@ plot_title <- paste0(as.character(lubridate::year(start_date)),
                      as.character(lubridate::year(end_date))
 )
 
-s1 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event==1) ~ SEP, data=surv_dat, id=IIntID,cluster=HouseholdId)
+s1 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event==1) ~ SEP, data=surv_dat, id=IIntID,cluster=HouseholdId_imp)
 
 p2 <- ggsurvplot(s1,
                  #fun="pct",
@@ -359,7 +360,7 @@ surv_dat_edu <- surv_dat
 surv_dat_edu <- subset(surv_dat_edu,Education!="")
 surv_dat_edu$Education <- as.factor(surv_dat_edu$Education)
 
-s2 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event) ~ Education, data=surv_dat_edu, id=IIntID,cluster=HouseholdId)
+s2 <- survfit(Surv(time=tstart_num, time2=tstop_num, event=sero_event) ~ Education, data=surv_dat_edu, id=IIntID,cluster=HouseholdId_imp)
 
 p3 <- ggsurvplot(s2,
                  linetype="solid",
@@ -440,7 +441,9 @@ ggpubr::ggexport(filename = plot_fname,width=1000,height=1000,
                  plot = p3_tab, device = "png")
 
 
-#### Preparing a Forest plot of univariable and multivariable results
+
+
+#### Preparing a Forest plot of univariable and multivariable results - SEP
 
 # Define the dependent variable using Surv()
 dependent <- "Surv(tstop_num, sero_event == 1)"
@@ -448,6 +451,13 @@ dependent <- "Surv(tstop_num, sero_event == 1)"
 # List of explanatory variables
 explanatory <- c('SEP','Age','Sex','Setting','Clinic_Distance')  # Explanatory variables
 cluster_var <- 'HouseholdId_imp'
+
+### Plot 3 produce a series of Kaplan Meier plots for each variable listed in the explanatory list
+### Save each plot and tile them into a single plot
+
+
+
+
 
 # Create an empty dataframe to store the univariable results
 univariable_results <- data.frame()
@@ -459,6 +469,12 @@ for (x in explanatory) {
   
   # Fit the Cox model
   fit <- coxph(formula, data = surv_dat)
+  
+  ### Testing that the proportional hazards assumption is met
+  test <- cox.zph(fit)
+  ### Extract the p-value from test$table
+  p_value <- test$table[5]
+  print (paste0("Test for proportional hazards assumption for ",x," p-value = ",as.character(p_value)))
   
   # Get the summary of the model
   fit_summary <- summary(fit)
@@ -481,6 +497,13 @@ for (x in explanatory) {
 # Run multivariable Cox regression
 multivariable_formula <- as.formula(paste(dependent, "~", paste(explanatory, collapse = " + "), "+ cluster(HouseholdId_imp)"))
 multivariable_fit <- coxph(multivariable_formula, data = surv_dat)
+
+## Testing that the proportional hazards assumption is met
+test <- cox.zph(multivariable_fit)
+
+### Print test results
+print(test)
+
 
 # Summarize multivariable results
 multivariable_summary <- summary(multivariable_fit)
@@ -528,30 +551,219 @@ combined_results <- rbind(univariable_results, multivariable_results)
 
 #write.csv(combined_results,file=paste0(output_dir,'/combined.csv'),row.names = FALSE)
 
-combined_results$Strata <- factor(combined_results$Strata, levels = c("Mid", "Wealthiest","25-39","40-64",">65","Female",
-                                                                      "Peri-Urban","Urban",">2-4",">4-6",">6"))
 
+combined_results$Variable[combined_results$Variable == "Setting"] <- "Residence Type"
+combined_results$Variable[combined_results$Variable == "Clinic_Distance"] <- "Distance to Clinic (km)"
+
+combined_results$Variable <- factor(combined_results$Variable, levels = c("SEP", "Age", "Sex", 
+                                                                          "Residence Type", "Distance to Clinic (km)"))
+combined_results$Strata <- factor(combined_results$Strata, levels = c("Wealthiest","Mid", ">65","40-64","25-39","Female",
+                                                                      "Urban","Peri-Urban",">6",">4-6",">2-4"))
 dotCOLS = c("#a6d8f0","#f9b282")   
 barCOLS = c("#008fd5","#de6b35")
-forest <- ggplot(combined_results, aes(x = HR, xmax = CI_upper, xmin = CI_lower, y = Strata, color = Model, fill = Model)) +
+uni_multi_plot_sep <- ggplot(combined_results, aes(x = HR, xmax = CI_upper,
+                        xmin = CI_lower, y = Strata, 
+                        color= Model, fill = Model)) +
   geom_point(size = 3, shape = 18, position = position_dodge(width = 0.5)) +
   geom_linerange(position = position_dodge(width = 0.5), size = 1) +
   geom_vline(xintercept = 1, size = 1) +
-  #geom_hline(yintercept = 0, size = 1) +
   facet_grid(Variable ~ ., scales = "free_y", space = "free_y") +
   scale_alpha_identity() +
   scale_fill_manual(values = barCOLS) +
   scale_color_manual(values = dotCOLS) +
-  scale_y_discrete(name = "Variable groups") +
-  scale_x_continuous(name = "Hazard ratio", limits = c(0, 5)) +
+  scale_y_discrete(name = "Variables") +
+  scale_x_continuous(name = "Hazard Ratio", limits = c(-0.5, 6)) +
   geom_text(aes(label = Variable), x = -Inf, y = Inf, hjust = 1, vjust = 1, check_overlap = TRUE, color = "darkgreen") +
   coord_cartesian(clip = "off") +
+  ggtitle(plot_title) +
   theme(
     panel.background = element_blank(),
     panel.spacing = unit(0, "pt"),
     axis.line.x.bottom = element_line(size = 1),
-    axis.text.y.left =  element_text(margin = margin(l = 20, unit = "pt")),
+    axis.text.y.left =  element_text(margin = margin(l = 50, unit = "pt")),
     strip.background = element_blank(), 
-    strip.text = element_blank()
+    strip.text = element_blank(),
+    legend.position=c(0.70,0.80),
+    plot.title = element_text(hjust = 0.5, vjust = 1)  # Center title
+  )  
+
+uni_multi_plot_sep
+
+uni_multi_fname <- paste0(output_dir,"/uni_multi_plot_sep",as.character(start_date),"_",as.character(end_date),".RData")
+
+save(uni_multi_plot_sep,file=uni_multi_fname)
+
+
+
+
+#### Preparing a Forest plot of univariable and multivariable results - Education 
+
+# Define the dependent variable using Surv()
+dependent <- "Surv(tstop_num, sero_event == 1)"
+
+# List of explanatory variables
+explanatory <- c('Education','Age','Sex','Setting','Clinic_Distance')  # Explanatory variables
+cluster_var <- 'HouseholdId_imp'
+
+# Create an empty dataframe to store the univariable results
+univariable_results <- data.frame()
+
+# Run univariable Cox regression for each explanatory variable
+for (x in explanatory) {
+  # Build the formula dynamically
+  formula <- as.formula(paste(dependent, "~", x, "+ cluster(HouseholdId_imp)"))
+  
+  # Fit the Cox model
+  fit <- coxph(formula, data = surv_dat_edu)
+  
+  # Get the summary of the model
+  fit_summary <- summary(fit)
+  
+  # Extract relevant results (HR, CI, and p-value)
+  variable_results <- data.frame(
+    Variable = rep(x, length(fit_summary$coefficients[, "coef"])),
+    Strata = rownames(fit_summary$coefficients),
+    HR = fit_summary$coefficients[, "exp(coef)"],
+    CI_lower = fit_summary$conf.int[, "lower .95"],
+    CI_upper = fit_summary$conf.int[, "upper .95"],
+    p_value = fit_summary$coefficients[, "Pr(>|z|)"],
+    Model = "Univariable"
   )
-forest
+  
+  # Append the results to the final data frame
+  univariable_results <- rbind(univariable_results, variable_results)
+}
+
+# Run multivariable Cox regression
+multivariable_formula <- as.formula(paste(dependent, "~", paste(explanatory, collapse = " + "), "+ cluster(HouseholdId_imp)"))
+multivariable_fit <- coxph(multivariable_formula, data = surv_dat_edu)
+
+# Summarize multivariable results
+multivariable_summary <- summary(multivariable_fit)
+
+# Extract multivariable results into a data frame
+multivariable_results <- data.frame(
+  Variable = rownames(multivariable_summary$coefficients),
+  Strata = rownames(multivariable_summary$coefficients),
+  HR = multivariable_summary$coefficients[, "exp(coef)"],
+  CI_lower = multivariable_summary$conf.int[, "lower .95"],
+  CI_upper = multivariable_summary$conf.int[, "upper .95"],
+  p_value = multivariable_summary$coefficients[, "Pr(>|z|)"],
+  Model = "Multivariable"
+)
+
+# Iterate over the rows of the data frames to dynamically remove the variable name prefix from Strata
+for (i in 1:nrow(univariable_results)) {
+  variable_name <- univariable_results$Variable[i]  # Get the variable name
+  univariable_results$Strata[i] <- sub(paste0("^", variable_name, "(.*)"), "\\1", univariable_results$Strata[i])
+}
+
+### automate this later
+strata_levels <- c("Primary", "Secondary", "Tertiary", "25-39", "40-64", ">65", "Female", "Urban", "Peri-Urban", ">2-4", ">4-6", ">6")
+
+# Create a regex pattern from the strata levels
+strata_pattern <- paste0("(", paste(strata_levels, collapse = "|"), ")$")
+
+# Dynamically extract variable names by stripping off the strata levels
+multivariable_results$Variable <- str_remove(multivariable_results$Strata, strata_pattern)
+
+# Iterate over the rows of the data frames to dynamically remove the variable name prefix from Strata
+for (i in 1:nrow(multivariable_results)) {
+  variable_name <- multivariable_results$Variable[i]  # Get the variable name
+  multivariable_results$Strata[i] <- sub(paste0("^", variable_name, "(.*)"), "\\1", multivariable_results$Strata[i])
+}
+
+# Further clean up by removing leading underscores or whitespace if needed
+univariable_results$Strata <- trimws(univariable_results$Strata)
+multivariable_results$Strata <- trimws(multivariable_results$Strata)
+
+# Combine univariable and multivariable results
+combined_results <- rbind(univariable_results, multivariable_results)
+
+#write.csv(combined_results,file=paste0(output_dir,'/combined.csv'),row.names = FALSE)
+
+
+combined_results$Variable[combined_results$Variable == "Setting"] <- "Residence Type"
+combined_results$Variable[combined_results$Variable == "Clinic_Distance"] <- "Distance to Clinic (km)"
+
+combined_results$Variable <- factor(combined_results$Variable, levels = c("Education", "Age", "Sex", 
+                                                                          "Residence Type", "Distance to Clinic (km)"))
+combined_results$Strata <- factor(combined_results$Strata, levels = c("Tertiary","Secondary","Primary", ">65","40-64","25-39","Female",
+                                                                      "Urban","Peri-Urban",">6",">4-6",">2-4"))
+dotCOLS = c("#a6d8f0","#f9b282")   
+barCOLS = c("#008fd5","#de6b35")
+uni_multi_plot_edu <- ggplot(combined_results, aes(x = HR, xmax = CI_upper,
+                                                   xmin = CI_lower, y = Strata, 
+                                                   color= Model, fill = Model)) +
+  geom_point(size = 3, shape = 18, position = position_dodge(width = 0.5)) +
+  geom_linerange(position = position_dodge(width = 0.5), size = 1) +
+  geom_vline(xintercept = 1, size = 1) +
+  facet_grid(Variable ~ ., scales = "free_y", space = "free_y") +
+  scale_alpha_identity() +
+  scale_fill_manual(values = barCOLS) +
+  scale_color_manual(values = dotCOLS) +
+  scale_y_discrete(name = "Variables") +
+  scale_x_continuous(name = "Hazard Ratio", limits = c(-0.5, 14)) +
+  geom_text(aes(label = Variable), x = -Inf, y = Inf, hjust = 1, vjust = 1, check_overlap = TRUE, color = "darkgreen") +
+  coord_cartesian(clip = "off") +
+  ggtitle(plot_title) +
+  theme(
+    panel.background = element_blank(),
+    panel.spacing = unit(0, "pt"),
+    axis.line.x.bottom = element_line(size = 1),
+    axis.text.y.left =  element_text(margin = margin(l = 50, unit = "pt")),
+    strip.background = element_blank(), 
+    strip.text = element_blank(),
+    legend.position=c(0.70,0.50),
+    plot.title = element_text(hjust = 0.5, vjust = 1)  # Center title
+  )  
+
+uni_multi_plot_edu
+
+uni_multi_fname <- paste0(output_dir,"/uni_multi_plot_edu",as.character(start_date),"_",as.character(end_date),".RData")
+
+save(uni_multi_plot_edu,file=uni_multi_fname)
+
+
+
+##### Produce univariable KM plots for each variable in the explanatory list
+
+
+# Loop through each variable in the explanatory vector
+for (var in explanatory) {
+  
+  # Convert variable to factor if needed
+  surv_dat[[var]] <- as.factor(surv_dat[[var]])
+  
+  # Fit the Kaplan-Meier survival model stratified by the variable
+  surv_formula <- as.formula(paste("Surv(time = tstart_num, time2 = tstop_num, event = sero_event == 1) ~", var))
+  fit <- survfit(surv_formula, data = surv_dat)
+  
+  # Extract survival data for plotting
+  surv_data <- data.frame(
+    time = fit$time,
+    surv = fit$surv,
+    strata = rep(levels(surv_dat[[var]]), fit$strata),
+    upper = fit$upper,
+    lower = fit$lower
+  )
+  
+  # Generate a color palette based on the number of strata
+  n_strata <- length(levels(surv_dat[[var]]))
+  colors <- brewer.pal(min(n_strata, 8), "Set1")
+  
+  # Plot the survival curves using ggplot2
+  pl1 <- ggplot(surv_data, aes(x = time, y = surv, color = strata)) +
+    geom_step() +
+    labs(
+      title = paste("Survival curve for", var),
+      y = "Probability of remaining seronegative",
+      x = "Follow-up time (days)"
+    ) +
+    scale_color_manual(values = colors) +
+    theme_minimal()
+  
+  # Save each plot as a PNG file with the variable name
+  file_path <- file.path(output_dir, paste0("km_", var, ".png"))
+  ggsave(file_path, pl1, width = 6, height = 4, dpi = 300)  # Adjust dimensions if needed
+}

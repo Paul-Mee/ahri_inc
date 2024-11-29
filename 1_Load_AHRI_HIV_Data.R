@@ -11,7 +11,7 @@ rm(list = ls())
 
 # Define vector of package names
 
-package_names <- c('haven','dplyr')
+package_names <- c('haven','dplyr','survival')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -49,7 +49,7 @@ for(i in 1:length(file_list)){
 getFiles = setFiles("C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/AHRI_2023")
 setFiles(
   folder = "C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_face_hiv/AHRI_data/AHRI_2023",
-  hivfile = "RD05-99 ACDIS HIV All-2024.dta",
+  hivfile = "RD05-99 ACDIS HIV All.dta",
 )
 
 
