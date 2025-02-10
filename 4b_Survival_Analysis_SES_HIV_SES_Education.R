@@ -10,8 +10,8 @@ rm(list = ls())
 
 # Define vector of package names
 
-package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate','ggpubr','grid',
-                   'viridis')
+package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate',
+                   'ggpubr','grid','finalfit','tidyr','stringr')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -56,207 +56,6 @@ HIV_edu_SES$age_cat  <- factor(HIV_edu_SES$age_cat , levels = c("15-24", "25-39"
 ### Sex as a factor 
 HIV_edu_SES$sex <- factor(HIV_edu_SES$Female,  levels = c(0, 1),
                                      labels = c("Male", "Female"))
-
-
-###
-### Aggregate HIV_Edu_SES by Round_Year and wealth_quant_mca.imp1 and
-### calculate the sum of time as total_PY and sero_event as  total_sero_events in each category 
-### then calculate incidence 
-### Then plot the raw data and smoothed curve through the data points 
-### as crosses in ggplot with Round_Year on the X-axis and incidence on the Y-axis
-### there will be one line for each strata of wealth_quant_mca.imp1
-### use different colours for each strata
-
-
-aggregated_data <- HIV_edu_SES %>%
-  group_by(Round_Year, wealth_quant_mca.imp1) %>%
-  summarise(
-    total_PY = sum(Time, na.rm = TRUE)/365.25,
-    total_sero_events = sum(sero_event, na.rm = TRUE),
-    incidence = total_sero_events / total_PY*100
-  ) %>%
-  ungroup()
-
-### Drop NA values for incidence from aggregated_data
-aggregated_data <- na.omit(aggregated_data)
-### Create variable SES in which wealth_quant_mca.imp1 is a factor
-aggregated_data$SES <- factor(aggregated_data$wealth_quant_mca.imp1,
-                                                levels = c("1","2","3"),
-                                                labels = c("Poorest","Mid","Wealthiest"))
-
-
-
-# Ensure Round_Year is numeric
-aggregated_data$Round_Year <- as.numeric(as.character(aggregated_data$Round_Year))
-
-# Plot with adjusted smoothing
-# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
-
-start_year <- 2005
-end_year <- 2021
-
-aggregated_data <- dplyr::filter(aggregated_data, 
-                                 Round_Year >= start_year & Round_Year <= end_year)
-
-
-
-# Plot with restricted x-axis range
-ggplot(aggregated_data, aes(x = Round_Year, y = incidence, color = SES, fill = SES)) +
-  # Add original data points as small X symbols
-  geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
-  # Add a smoothed curve through the data points with the same color as the data points
-  stat_smooth(
-    method = "loess", 
-    span = 0.5, 
-    se = TRUE, 
-    alpha = 0.3
-  ) + # Smoothed curve with shaded SE
-  scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
-  scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
-  labs(
-    title = "Incidence by Round Year and SES Quantile 
-              (with 95% confidence intervals)",
-    x = "Round Year",
-    y = "Incidence (events per 100 person-years)",
-    color = "SES Quantile",
-    fill = "SES Quantile"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "bottom") + # Move legend to bottom of plot
-  theme(plot.title = element_text(size=12,hjust=0.5)) # Centre and decrease size of plot title
-
-
-# Save the plot as a PNG file
-ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_ses_quantile.png"), width = 6, height = 4)
-
-
-### Aggregate data for Education
-aggregated_data_edu <- HIV_edu_SES %>%
-  group_by(Round_Year, highest_edu_imp) %>%
-  summarise(
-    total_PY = sum(Time, na.rm = TRUE)/365.25,
-    total_sero_events = sum(sero_event, na.rm = TRUE),
-    incidence = total_sero_events / total_PY*100
-  ) %>%
-  ungroup()
-
-### Drop NA values for incidence from aggregated_data
-aggregated_data_edu <- na.omit(aggregated_data_edu)
-### Filter to drop rows where highest_edu_imp is missing
-aggregated_data_edu <- dplyr::filter(aggregated_data_edu, highest_edu_imp != "")
-### Create education variable in which highest_edu_imp is a factor
-aggregated_data_edu$education <- factor(aggregated_data_edu$highest_edu_imp,
-                              levels = c("None","Primary","Secondary","Tertiary"),
-                              labels = c("None","Primary","Secondary","Tertiary"))
-
-
-# Ensure Round_Year is numeric
-aggregated_data_edu$Round_Year <- as.numeric(as.character(aggregated_data_edu$Round_Year))
-
-# Plot with adjusted smoothing
-# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
-
-start_year <- 2005
-end_year <- 2021
-
-aggregated_data_edu <- dplyr::filter(aggregated_data_edu, 
-                                 Round_Year >= start_year & Round_Year <= end_year)
-
-
-
-# Plot with restricted x-axis range
-ggplot(aggregated_data_edu, aes(x = Round_Year, y = incidence, color = education, fill = education)) +
-  # Add original data points as small X symbols
-  geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
-  # Add a smoothed curve through the data points with the same color as the data points
-  stat_smooth(
-    method = "loess", 
-    span = 0.5, 
-    se = TRUE, 
-    alpha = 0.3
-  ) + # Smoothed curve with shaded SE
-  scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
-  scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
-  labs(
-    title = "Incidence by Round Year and Highest level of Education
-              (with 95% confidence intervals)",
-    x = "Round Year",
-    y = "Incidence (events per 100 person-years)",
-    color = "Highest Education Level",
-    fill = "Highest Education Level"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "bottom") + # Move legend to bottom of plot
-  theme(plot.title = element_text(size=12,hjust=0.5)) # Centre and decrease size of plot title
-
-
-# Save the plot as a PNG file
-ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_education_quantile.png"), width = 6, height = 4)
-
-### Aggregate data for Sex
-aggregated_data_sex <- hiv_imput_full %>%
-  group_by(Round_Year, Female) %>%
-  summarise(
-    total_PY = sum(Time, na.rm = TRUE)/365.25,
-    total_sero_events = sum(sero_event, na.rm = TRUE),
-    incidence = total_sero_events / total_PY*100
-  ) %>%
-  ungroup()
-
-
-### Create sex variable in which highest_edu_imp is a factor
-aggregated_data_sex$sex    <- factor(aggregated_data_sex$Female,
-                                        levels = c(0,1),
-                                        labels = c("Male","Female"))
-
-
-# Ensure Round_Year is numeric
-aggregated_data_sex$Round_Year <- as.numeric(as.character(aggregated_data_sex$Round_Year))
-
-# Plot with adjusted smoothing
-# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
-
-start_year <- 2005
-end_year <- 2021
-
-aggregated_data_sex <- dplyr::filter(aggregated_data_sex, 
-                                     Round_Year >= start_year & Round_Year <= end_year)
-
-
-
-# Plot with restricted x-axis range
-ggplot(aggregated_data_sex, aes(x = Round_Year, y = incidence, color = sex, fill = sex)) +
-  # Add original data points as small X symbols
-  geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
-  # Add a smoothed curve through the data points with the same color as the data points
-  stat_smooth(
-    method = "loess", 
-    span = 0.5, 
-    se = TRUE, 
-    alpha = 0.3
-  ) + # Smoothed curve with shaded SE
-  scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
-  scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
-  labs(
-    title = "Incidence by Round Year and Sex
-              (with 95% confidence intervals)",
-    x = "Round Year",
-    y = "Incidence (events per 100 person-years)",
-    color = "Sex",
-    fill = "Sex"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "bottom") + # Move legend to bottom of plot
-  theme(plot.title = element_text(size=12,hjust=0.5)) # Centre and decrease size of plot title
-
-
-# Save the plot as a PNG file
-ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_sex_quantile.png"), width = 6, height = 4)
-
-
 
 
 ### Set start and end dates for survival analysis 
@@ -647,22 +446,90 @@ ggpubr::ggexport(filename = plot_fname,width=1000,height=1000,
 
 #### Summary analysis using finalfit
 #### SEP
-
-covariates <- c( 'SEP','Age','Sex','Setting','Clinic_Distance','cluster(HouseholdId)')
-dependent <- "Surv(time=ntime, event=sero_event==1)"
-
-
-surv_dat %>%
-  finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
-                           add_dependent_label = FALSE) -> t1 
-# rename("Overall survival" = label) %>% 
-# rename(" " = levels) %>% 
-# rename("  " = all) -> t1
-knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
+# 
+# covariates <- c( 'SEP','Age','Sex','Setting','Clinic_Distance','cluster(HouseholdId)')
+# dependent <- "Surv(time=ntime, event=sero_event==1)"
+# 
+# 
+# surv_dat %>%
+#   finalfit::finalfit.coxph(dependent=dependent ,explanatory = covariates,
+#                            add_dependent_label = FALSE) -> t1 
+# # rename("Overall survival" = label) %>% 
+# # rename(" " = levels) %>% 
+# # rename("  " = all) -> t1
+# knitr::kable(t1, row.names=FALSE, align=c("l", "l", "r", "r", "r", "r"))
 
 ### Use r markdown to get nicely formatted tables in Word
 
 ### https://argoshare.is.ed.ac.uk/healthyr_book/ms-word-via-knitrr-markdown.html
+
+
+
+
+explanatory <- c('SEP','Age','Sex','Setting','Clinic_Distance')  # Explanatory variables
+dependent <- "Surv(time=ntime, event=sero_event==1)" # Survival outcome variable
+cluster_var <- "inst"  # Cluster variable (replace with yours)
+
+# Univariable Cox regression with cluster term
+univariable_results <- explanatory %>%
+  lapply(function(x) {
+    model <- coxph(as.formula(paste(dependent, "~", x, "+ cluster(", cluster_var, ")")), data = surv_dat)
+    result <- fit2df(model)
+    result$variable <- x  # Add variable name for later merging
+    return(result)
+  }) %>%
+  bind_rows()  # Combine all results into one data frame
+
+
+
+univariable_results <- univariable_results %>%
+  mutate(variable = paste(variable, explanatory, sep = ": "))  # Combine variable with strata
+
+
+
+# Multivariable Cox regression with cluster term
+multivariable_model <- coxph(as.formula(paste(dependent, "~", paste(explanatory, collapse = " + "), "+ cluster(", cluster_var, ")"))
+                               , data = surv_dat)
+multivariable_results <- fit2df(multivariable_model)
+multivariable_results$variable <- "Multivariable"  # Label for multivariable results
+
+# Add a column to identify the type of model
+univariable_results <- univariable_results %>%
+  mutate(model = "Univariable")
+
+multivariable_results <- multivariable_results %>%
+  mutate(model = "Multivariable")
+
+# Combine univariable and multivariable results into one data frame
+combined_results <- bind_rows(univariable_results, multivariable_results)
+
+# Extract the HR, lower CI, and upper CI using regular expressions
+combined_results <- combined_results %>%
+  mutate(
+    estimate = as.numeric(str_extract(HR, "^[0-9.]+")),           # Extract HR value
+    lower_ci = as.numeric(str_extract(HR, "(?<=\\()[0-9.]+")),    # Extract lower CI
+    upper_ci = as.numeric(str_extract(HR, "(?<=-)[0-9.]+(?=,)"))  # Extract upper CI
+  )
+
+# Keep only the columns needed for plotting (e.g., estimate, lower_ci, upper_ci, variable, model)
+combined_results <- combined_results %>%
+  select(variable, model, estimate, lower_ci, upper_ci)
+
+
+# Create the forest plot with "SEP" as the variable name on the y-axis
+ggplot(univariable_results, aes(y = factor(variable, levels = unique(variable)), x = estimate)) +
+  geom_point(size = 3, colour = "blue") +  # Points for HR estimates
+  geom_errorbar(aes(xmin = lower_ci, xmax = upper_ci), width = 0.2) +  # Error bars for CIs
+  theme_minimal() +
+  labs(title = "Univariable Cox Regression Results",
+       x = "Hazard Ratio (log scale)",
+       y = "Variable") +  # Set y-axis label to "Variable"
+  scale_x_log10() +  # Log scale for hazard ratios
+  scale_y_discrete(labels = c("SEP" = "SEP")) +  # Set y-axis label to show "SEP"
+  theme(axis.text.y = element_text(angle = 0, hjust = 1))  # Adjust y-axis text for readability
+
+
+
 
 
 #### Summary analysis using finalfit

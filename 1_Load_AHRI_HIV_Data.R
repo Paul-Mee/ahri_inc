@@ -27,11 +27,12 @@ code_dir <- 'C:/github/ahri_inc/avdm_ahri_code/R/'
 sim_num = 1 # Multiple imputation simulations 
 age_min = 15 # minimum age for incidence calculation
 age_max = 100 # maximum age for incidence calculation
+# age_max = 54 # maximum age for incidence calculation - maximum age used in Vandormael et al 
 gender = "all" # Include Males (male) Females (female) or both (all)
 start_year = 2004
 end_year = 2023
 
-## This is a download of the files from Alain Vandermael's AHRI R library 
+## This is a download of the files from Alain Vandormael's AHRI R library 
 ## The files with suffix 'PM' have been updated to reflect changes in data file names 
 ## or R packages . 
 

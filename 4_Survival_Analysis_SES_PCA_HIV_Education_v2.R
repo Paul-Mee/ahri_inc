@@ -11,7 +11,7 @@ rm(list = ls())
 # Define vector of package names
 
 package_names <- c('dplyr','ggplot2','ggsurvfit','survminer','survival','lubridate','ggpubr','grid',
-                   'viridis')
+                   'viridis', 'gt', 'flextable','officer')
 
 
 # This code installs all the other required packages if they are not currently installed and load all the libraries
@@ -25,7 +25,7 @@ output_dir <- 'C:/Users/pmee/OneDrive - University of Lincoln/Projects/Changing_
 #### HIV data - saved from 1_Load_AHRI_HIV_Data.R
 load(paste0(output_dir,"/ACDIS_hiv_full.RData"))
 #### Asset data - saved from 2_Generate_AHRI_SES_Index.R
-load(paste0(output_dir,"/ass_ses_full_imp.RData"))
+load(paste0(output_dir,"/ass_pca_imp.RData"))
 #### education data - saved from 3_Generate_AHRI_edu_Data.R
 load(paste0(output_dir,"/ACDIS_edu_all.RData"))
 
@@ -35,7 +35,7 @@ HIV_edu <- merge(hiv_imput_full,ACDIS_edu_all,by.x = c('IIntID','Round_Year'),by
 
 #### Merge this file with asset data on Household ID and Round_Year
 
-HIV_edu_SES <- merge(HIV_edu,ass_ses_full_imp,by.x = c('HouseholdId_imp','Round_Year'),by.y=c('HHIntId','Round_Year'),all.x=TRUE)
+HIV_edu_SES <- merge(HIV_edu,ass_pca_imp,by.x = c('HouseholdId_imp','Round_Year'),by.y=c('HHIntId','Round_Year'),all.x=TRUE)
 
 #### Create Sex and Age Category variables
 
@@ -56,6 +56,8 @@ HIV_edu_SES$age_cat  <- factor(HIV_edu_SES$age_cat , levels = c("15-24", "25-39"
 ### Sex as a factor 
 HIV_edu_SES$sex <- factor(HIV_edu_SES$Female,  levels = c(0, 1),
                                      labels = c("Male", "Female"))
+# Save data to an RDS file in output_dir
+saveRDS(HIV_edu_SES, file = paste0(data_dir, "/HIV_edu_SES.RDS"))
 
 
 ###
@@ -67,9 +69,9 @@ HIV_edu_SES$sex <- factor(HIV_edu_SES$Female,  levels = c(0, 1),
 ### there will be one line for each strata of wealth_quant_mca.imp1
 ### use different colours for each strata
 
-
-aggregated_data <- HIV_edu_SES %>%
-  group_by(Round_Year, wealth_quant_mca.imp1) %>%
+#### Original SES data 
+aggregated_data_raw <- HIV_edu_SES %>%
+  group_by(Round_Year, wealth_quantile_pca) %>%
   summarise(
     total_PY = sum(Time, na.rm = TRUE)/365.25,
     total_sero_events = sum(sero_event, na.rm = TRUE),
@@ -78,16 +80,16 @@ aggregated_data <- HIV_edu_SES %>%
   ungroup()
 
 ### Drop NA values for incidence from aggregated_data
-aggregated_data <- na.omit(aggregated_data)
+aggregated_data_raw <- na.omit(aggregated_data_raw)
 ### Create variable SES in which wealth_quant_mca.imp1 is a factor
-aggregated_data$SES <- factor(aggregated_data$wealth_quant_mca.imp1,
+aggregated_data_raw$SES <- factor(aggregated_data_raw$wealth_quantile_pca,
                                                 levels = c("1","2","3"),
                                                 labels = c("Poorest","Mid","Wealthiest"))
 
 
 
 # Ensure Round_Year is numeric
-aggregated_data$Round_Year <- as.numeric(as.character(aggregated_data$Round_Year))
+aggregated_data_raw$Round_Year <- as.numeric(as.character(aggregated_data_raw$Round_Year))
 
 # Plot with adjusted smoothing
 # Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
@@ -95,24 +97,24 @@ aggregated_data$Round_Year <- as.numeric(as.character(aggregated_data$Round_Year
 start_year <- 2005
 end_year <- 2021
 
-aggregated_data <- dplyr::filter(aggregated_data, 
+aggregated_data_raw <- dplyr::filter(aggregated_data_raw, 
                                  Round_Year >= start_year & Round_Year <= end_year)
 
 
 
 # Plot with restricted x-axis range
-ggplot(aggregated_data, aes(x = Round_Year, y = incidence, color = SES, fill = SES)) +
+ggplot(aggregated_data_raw, aes(x = Round_Year, y = incidence, color = SES, fill = SES)) +
   # Add original data points as small X symbols
   geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
-  # Add a smoothed curve through the data points with the same color as the data points
+  #Add a smoothed curve through the data points with the same color as the data points
   stat_smooth(
-    method = "loess", 
-    span = 0.5, 
-    se = TRUE, 
+    method = "loess",
+    span = 0.5,
+    se = FALSE,
     alpha = 0.3
   ) + # Smoothed curve with shaded SE
-  scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
+  #scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
+  #scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
   scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
   labs(
     title = "Incidence by Round Year and SES Quantile 
@@ -128,7 +130,72 @@ ggplot(aggregated_data, aes(x = Round_Year, y = incidence, color = SES, fill = S
 
 
 # Save the plot as a PNG file
-ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_ses_quantile.png"), width = 6, height = 4)
+ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_ses_quantile_raw.png"), width = 6, height = 4)
+
+
+#### Imputed SES data 
+aggregated_data_imp <- HIV_edu_SES %>%
+  group_by(Round_Year, wealth_quant_pca.imp1) %>%
+  summarise(
+    total_PY = sum(Time, na.rm = TRUE)/365.25,
+    total_sero_events = sum(sero_event, na.rm = TRUE),
+    incidence = total_sero_events / total_PY*100
+  ) %>%
+  ungroup()
+
+### Drop NA values for incidence from aggregated_data
+aggregated_data_imp <- na.omit(aggregated_data_imp)
+### Create variable SES as a factor
+aggregated_data_imp$SES <- factor(aggregated_data_imp$wealth_quant_pca.imp1,
+                                  levels = c("1","2","3"),
+                                  labels = c("Poorest","Mid","Wealthiest"))
+
+
+
+# Ensure Round_Year is numeric
+aggregated_data_imp$Round_Year <- as.numeric(as.character(aggregated_data_imp$Round_Year))
+
+# Plot with adjusted smoothing
+# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
+
+start_year <- 2005
+end_year <- 2021
+
+aggregated_data_imp <- dplyr::filter(aggregated_data_imp, 
+                                     Round_Year >= start_year & Round_Year <= end_year)
+
+
+
+# Plot with restricted x-axis range
+ggplot(aggregated_data_imp, aes(x = Round_Year, y = incidence, color = SES, fill = SES)) +
+  # Add original data points as small X symbols
+  geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
+  #Add a smoothed curve through the data points with the same color as the data points
+  stat_smooth(
+    method = "loess",
+    span = 0.5,
+    se = FALSE,
+    alpha = 0.3
+  ) + # Smoothed curve with shaded SE
+  #scale_color_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Viridis palette for discrete data
+  #scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
+  scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
+  labs(
+    title = "Incidence by Round Year and SES Quantile 
+              (with 95% confidence intervals)",
+    x = "Round Year",
+    y = "Incidence (events per 100 person-years)",
+    color = "SES Quantile",
+    fill = "SES Quantile"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") + # Move legend to bottom of plot
+  theme(plot.title = element_text(size=12,hjust=0.5)) # Centre and decrease size of plot title
+
+
+# Save the plot as a PNG file
+ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_ses_quantile_imp.png"), width = 6, height = 4)
+
 
 
 ### Aggregate data for Education
@@ -180,8 +247,7 @@ ggplot(aggregated_data_edu, aes(x = Round_Year, y = incidence, color = education
   scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
   scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
   labs(
-    title = "Incidence by Round Year and Highest level of Education
-              (with 95% confidence intervals)",
+    title = "Incidence by Round Year and Highest level of Education (with 95% confidence intervals)",
     x = "Round Year",
     y = "Incidence (events per 100 person-years)",
     color = "Highest Education Level",
@@ -196,38 +262,73 @@ ggplot(aggregated_data_edu, aes(x = Round_Year, y = incidence, color = education
 ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_education_quantile.png"), width = 6, height = 4)
 
 ### Aggregate data for Sex
-aggregated_data_sex <- hiv_imput_full %>%
+
+
+
+# Summarise the data
+aggregated_data_sex <- HIV_edu_SES %>%
   group_by(Round_Year, Female) %>%
   summarise(
     total_PY = sum(Time, na.rm = TRUE)/365.25,
     total_sero_events = sum(sero_event, na.rm = TRUE),
-    incidence = total_sero_events / total_PY*100
+    incidence = (total_sero_events / total_PY) * 100,
+    .groups = "drop"
+  )
+
+
+
+# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
+aggregated_data_sex <- dplyr::filter(aggregated_data_sex, 
+                                     Round_Year >= start_year & Round_Year <= end_year)
+# Recode the sex variable and reorder columns
+aggregated_data_sex <- aggregated_data_sex %>%
+  mutate(
+    sex = factor(Female, levels = c(0, 1), labels = c("Male", "Female"))
   ) %>%
-  ungroup()
+  select(Round_Year, sex, total_PY, total_sero_events, incidence)  # Drop 'Female' and reorder
 
 
-### Create sex variable in which highest_edu_imp is a factor
-aggregated_data_sex$sex    <- factor(aggregated_data_sex$Female,
-                                        levels = c(0,1),
-                                        labels = c("Male","Female"))
+
+
+aggregated_data_sex <- aggregated_data_sex %>%
+  mutate(
+    total_PY = round(total_PY, 2),
+    incidence = round(incidence, 2)
+  )
+
+# Create flextable
+flextab <- flextable(aggregated_data_sex) %>%
+  # Format total_sero_events as integer
+  colformat_int(j = "total_sero_events") %>%
+  colformat_num(j = c("total_PY", "incidence"), digits = 2) %>%
+  set_header_labels(
+    Round_Year = "Round Year",
+    sex = "Sex",
+    total_PY = "Total Person-Years",
+    total_sero_events = "Total Seroconversions",
+    incidence = "Incidence (per 100 PY)"
+  ) %>%
+  autofit()
+
+# Write flextable to Word
+read_docx() %>%
+  body_add_par(paste0("Incidence by Sex and Year for individuals aged ",
+                      as.character(age_min)," to ",as.character(age_max)), style = "heading 1") %>%
+  body_add_par("Summary of Person-Years and Seroconversion Events", style = "heading 2") %>%
+  body_add_flextable(flextab) %>%
+  print(target = paste0(output_dir,"/incidence_summary.docx"))
+
 
 
 # Ensure Round_Year is numeric
 aggregated_data_sex$Round_Year <- as.numeric(as.character(aggregated_data_sex$Round_Year))
 
 # Plot with adjusted smoothing
-# Filter aggregated_data to limit the data to Round_Year from  start_year to end_year
-
-start_year <- 2005
-end_year <- 2021
-
-aggregated_data_sex <- dplyr::filter(aggregated_data_sex, 
-                                     Round_Year >= start_year & Round_Year <= end_year)
 
 
 
 # Plot with restricted x-axis range
-ggplot(aggregated_data_sex, aes(x = Round_Year, y = incidence, color = sex, fill = sex)) +
+sex_plot <- ggplot(aggregated_data_sex, aes(x = Round_Year, y = incidence, color = sex, fill = sex)) +
   # Add original data points as small X symbols
   geom_point(shape = 4, size = 2, stroke = 1) + # Crosses for raw data
   # Add a smoothed curve through the data points with the same color as the data points
@@ -241,8 +342,8 @@ ggplot(aggregated_data_sex, aes(x = Round_Year, y = incidence, color = sex, fill
   scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) + # Match fill colors to line colors
   scale_x_continuous(limits = c(start_year, end_year)) + # Set x-axis limits
   labs(
-    title = "Incidence by Round Year and Sex
-              (with 95% confidence intervals)",
+    title = paste0("Incidence by Round Year and Sex with 95% confidence intervals 
+                   Age ", as.character(age_min)," to ",as.character(age_max)),
     x = "Round Year",
     y = "Incidence (events per 100 person-years)",
     color = "Sex",
@@ -254,8 +355,33 @@ ggplot(aggregated_data_sex, aes(x = Round_Year, y = incidence, color = sex, fill
 
 
 # Save the plot as a PNG file
-ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_sex_quantile.png"), width = 6, height = 4)
+#ggsave(filename = paste0(output_dir,"/incidence_by_round_year_and_sex_quantile.png"), width = 6, height = 4)
 
+landscape_one_column <- block_section(
+  prop_section(
+    page_size = page_size(orient = "landscape"), type = "continuous"
+  )
+)
+  
+
+
+doc <- read_docx() %>%
+  # Add portrait content
+  body_add_par("Incidence by Sex and Year", style = "heading 1") %>%
+  body_add_par(paste0("Summary of Person-Years and Seroconversion Events (for those aged) "
+               ,as.character(age_min)," to ", as.character(age_max)), style = "heading 2") %>%
+  body_add_flextable(flextab) %>%
+  
+  # End the current (portrait) section and start a new one in landscape orientation
+  body_end_section_portrait() %>%
+
+  
+  # Add heading and plot in landscape orientation
+  body_add_gg(value = sex_plot, width = 10, height = 5, style = "centered") %>%
+  body_end_block_section(value = landscape_one_column)
+
+print(doc, target = paste0(output_dir,"/inc_sex_",as.character(age_min),"-"
+                           ,as.character(age_max),".docx"))
 
 
 
@@ -279,13 +405,13 @@ surv_dat <- dplyr::filter(HIV_edu_SES,((late_neg >= first_start_date) &
 #Wealth Quantile from MCA
 ###surv_dat$SES <- surv_dat$Wealth_Quant_MCA
 ### If using imputed values 
-surv_dat$SES <- surv_dat$wealth_quant_mca.imp1
+###surv_dat$SES <- surv_dat$wealth_quant_ca.imp1
 
 #Wealth Quantile from Factor Analysis 
 #surv_dat$SES <- surv_dat$Wealth_Quant_FA
 
 #Wealth Quantile from PCA
-#surv_dat$SES <- surv_dat$Wealth_Quant_PCA
+surv_dat$SES <- surv_dat$wealth_quant_pca.imp1
 
 ### SES as a factor
 
@@ -482,7 +608,8 @@ p2 <- ggsurvplot(s1,
                   legend.title="SEP")
 
 p2$plot <- p2$plot + 
-            ylim(c(0.7,1.0)) + 
+            ylim(c(0.75,1.0)) +
+            xlim(c(0,4000)) +
             scale_color_manual(values = c('red', 'blue','green'),
             labels = c('Poorest', 'Mid','Wealthiest')) +
         theme(plot.title = element_text(hjust = 0.5,lineheight=.5),
@@ -491,7 +618,7 @@ p2$plot <- p2$plot +
         axis.text.y = element_text(size=12, face="bold", color = "black"),
         axis.title = element_text(face="bold"),
         legend.title = element_text(size=12, face="bold"),
-        legend.position=c(0.20,0.65)) 
+        legend.position=c(0.7,0.65)) 
 p2
 
 ### Log-rank test 
@@ -529,7 +656,7 @@ p2_tab <- p2
 p2_tab$plot <- p2_tab$plot + 
   annotation_custom(table_grob, 
                     xmin = 100, xmax = 900,  # Adjust these values for horizontal placement
-                    ymin = 0.75, ymax = 0.9)  # Adjust these values for vertical placement
+                    ymin = 0.80, ymax = 0.90)  # Adjust these values for vertical placement
 
 # Define the title text and its position
 title_text <- "p-values for pairwise comparisons of strata"
@@ -538,8 +665,8 @@ title_grob <- textGrob(title_text, gp = gpar(fontsize = 12, fontface = "plain"),
 # Add the title below the table
 p2_tab$plot <- p2_tab$plot + 
   annotation_custom(title_grob, 
-                    xmin = 100, xmax = 900,  # Adjust these values for horizontal placement
-                    ymin = 0.68, ymax = 0.90)  # Adjust these values for vertical placement
+                    xmin = 300, xmax = 900,  # Adjust these values for horizontal placement
+                    ymin = 0.80, ymax = 0.81)  # Adjust these values for vertical placement
 p2_tab
 
 plot_fname <- paste0(output_dir,"/km_all_open_sep_",as.character(start_date),"_",as.character(end_date),".png")

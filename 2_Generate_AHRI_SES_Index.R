@@ -38,8 +38,10 @@ pacman::p_load(char=package_names)
 
 ### Define Function - Cat_Bin - Converts a categorical variable to a series of binary variables each 
 ### representing a level of the categorical variable as a yes/no
-### Input variables - Df name , index_vars (vector of the index column names) , 
-### categorical value column name , max non-missing value 
+### Input variables -  df = dataframe name
+### index_vars = vector of the index column names
+### col_name = column name in df to be converted to binary
+### max_val = maximum acceptable value of variable
 
 
 cat_bin <- function(df,index_vars, col_name,max_val){
@@ -813,7 +815,7 @@ ass_data_select_mca <- ass_data_select_mca %>% filter(DSRound!=45 & DSRound!=46)
 year_list <- sort(unique(ass_data_select$Round_Year))
 year_list
 
-#year = 2021
+#year = 2010
 
 #### Loop through a list of years for PCA/FA calculation 
 for (year in year_list){
@@ -833,7 +835,8 @@ for (year in year_list){
   }
   
   ### Drop any columns if all values are NA
-  ass_data_year <- ass_data_year[colSums(is.na(ass_data_year)) == 0]
+  
+  ass_data_year <- ass_data_year[, colSums(!is.na(ass_data_year)) > 0]
   
   ### Drop any rows with NA values as this will led to problems with PCA calculation 
   
@@ -845,7 +848,7 @@ for (year in year_list){
   #print(paste0("Total number of rows with all asset values equal to zero =  ",as.character(n_zero)))
   
   ### Drop rows with Sum = 0 for all asset values (i.e. all 0 ) 
-  ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(5:(ncol(ass_data_tmp) - 2))], na.rm=TRUE)
+  ass_data_tmp$ses_sum <- rowSums(ass_data_tmp[ , c(6:(ncol(ass_data_tmp) - 4))], na.rm=TRUE)
   ass_data_tmp <-  dplyr::filter(ass_data_tmp, ses_sum > 0 )
   print(paste0("Rows after dropping all zero values = ",as.character(nrow(ass_data_tmp))))
   
@@ -926,6 +929,37 @@ for (year in year_list){
   #### Add 1st dimension of PCA analysis to ass_data_tmp dataframe
   names(pca_score)[1] <- "pca_1d_score"
   
+  ### Checking interpretation of PCA scores
+  
+  ass_data_tmp$HHIntId <- row.names(ass_data_tmp)
+  
+  check_pca <- merge(ass_data_tmp,pca_score,by = 'HHIntId')
+  
+  ## Calculate the sum of columns 6 to 34 of ass_data_tmp2 and add it as a variable to the dataframe
+  
+  # # Calculate the row sums for columns 6 to 34 and add as a new column 'check_val'
+  check_pca$check_val <- rowSums(check_pca[, 2:32], na.rm = TRUE)
+  # 
+  # 
+  # # create a ggplot scatter plot of ass_data_tmp2$check_val vs ass_data_tmp2$mca_score
+  # 
+
+  # Create scatter plot
+  ggplot(check_pca, aes(x = check_val, y = pca_1d_score)) +
+    geom_point(size = 2, alpha = 0.7, color = "blue") + # Points with transparency and color
+    labs(
+      title = "Scatter Plot of check_val vs pca_score",
+      x = "Check Value (check_val)",
+      y = "PCA score"
+    ) +
+    theme_minimal() + # Minimal theme for clean aesthetics
+    theme(
+      plot.title = element_text(hjust = 0.5), # Center the plot title
+      text = element_text(size = 12) # Adjust text size
+    )
+  
+  
+  
   #### Factor Analysis - Composite Index
   
   #### Composite Index using Factor Analysis - Methods
@@ -998,6 +1032,8 @@ for (year in year_list){
   }
 }
 
+year=2010
+
 #### Loop through a list of years
 for (year in year_list){
   print("MCA calculation")
@@ -1040,10 +1076,9 @@ for (year in year_list){
   
   ass_data_tmp2 <- cbind(ass_data_tmp_head,ass_data_tmp_tail2)
   
-  ### Convert all columns to factors
-  
-  ass_data_tmp_tail_fact <-data.frame(lapply(ass_data_tmp_tail,factor))
-  
+  ### Convert all columns in ass_data_tmp_tail2 to factors keeping row labels
+  ass_data_tmp_tail_fact <- data.frame(lapply(ass_data_tmp_tail2, as.factor), row.names = rownames(ass_data_tmp_tail2))
+ 
  
   ### MCA alternative approaches 
   
@@ -1084,6 +1119,49 @@ for (year in year_list){
   # ## Keep HHId, Year , mca_score , wealth_quantile_mca
   # 
   ass_data_ses_year <- ass_data_tmp2[,c('HHIntId','Round_Year','mca_score','wealth_quantile_mca')]
+  
+  ## Calculate the sum of columns 6 to 34 of ass_data_tmp2 and add it as a variable to the dataframe
+  
+  # # Calculate the row sums for columns 6 to 34 and add as a new column 'check_val'
+  # ass_data_tmp2$check_val <- rowSums(ass_data_tmp2[, 6:34], na.rm = TRUE)
+  # 
+  # 
+  # # create a ggplot scatter plot of ass_data_tmp2$check_val vs ass_data_tmp2$mca_score
+  # 
+  # library(ggplot2)
+  # 
+  # # Create scatter plot
+  # ggplot(ass_data_tmp2, aes(x = check_val, y = wealth_quantile_mca)) +
+  #   geom_point(size = 2, alpha = 0.7, color = "blue") + # Points with transparency and color
+  #   labs(
+  #     title = "Scatter Plot of check_val vs mca_score",
+  #     x = "Check Value (check_val)",
+  #     y = "wealth quantile"
+  #   ) +
+  #   theme_minimal() + # Minimal theme for clean aesthetics
+  #   theme(
+  #     plot.title = element_text(hjust = 0.5), # Center the plot title
+  #     text = element_text(size = 12) # Adjust text size
+  #   )
+  
+ mca_score <- ass_data_tmp2[c('HHIntId','mca_score')]
+  
+ mca_pca_score <- merge(mca_score,pca_score,by='HHIntId')
+ 
+ # # Create scatter plot
+ ggplot(mca_pca_score, aes(x = mca_score, y = pca_1d_score)) +
+   geom_point(size = 2, alpha = 0.7, color = "blue") + # Points with transparency and color
+   labs(
+     title = "Scatter Plot of mca score vs  pca_score 2010",
+     x = "mca score",
+     y = "pca score"
+   ) +
+   theme_minimal() + # Minimal theme for clean aesthetics
+   theme(
+     plot.title = element_text(hjust = 0.5), # Center the plot title
+     text = element_text(size = 12) # Adjust text size
+   )
+  
   # 
   ### Append to overall dataframe      
   if(exists("ass_ses_all_mca")==FALSE) {
